@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Shinkei Fish Biologger</title>
+<!--
+  Shinkei Fish Biologger — control app 2.3.0
+  Pairs with firmware 2.1.0 (fish_biologger_v2.ino). No protocol changes.
+
+  2.3.0 is a visual pass only. Design brief: usable on a boat in the sun.
+
+  Why light rather than the dark console look:
+    A phone in direct sunlight is legible in proportion to how much light it
+    emits. A white background at full brightness emits far more than a dark one,
+    and a dark screen outdoors mostly reflects the sky back at you. So the
+    sunlight requirement and the dark-console aesthetic were in direct conflict,
+    and legibility won. This leans on the shinkei.systems editorial language
+    instead — light ground, generous spacing, normal-case headings, orange as
+    the single brand accent.
+
+  Sun-legibility rules applied throughout:
+    - 2px borders everywhere, so panel edges survive glare and low contrast.
+    - No text lighter than #5f656c. Pale grey on white disappears outdoors.
+    - State colours darkened for contrast on white: the bright console green was
+      close to unreadable on a light ground, so it is a deep green here. Every
+      colour in the palette is contrast-checked, and each one clears WCAG AA
+      against the card ground — 4.5:1 for text, 3:1 for chart strokes.
+    - Chart series use saturated, dark-enough hues that read on white in sun,
+      and screen and PNG export now share one palette.
+
+  The header mark is the supplied Shinkei logo, re-tinted from cream to ink for
+  the light ground and inlined as a data URI (4.7 kB) so the page needs no
+  network. It doubles as the favicon.
+
+  Mobile behaviour (explicitly requested):
+    - All inputs are 16px, which stops iOS zooming the page on focus.
+    - Buttons keep their existing size but carry a 44px min-height and
+      touch-action: manipulation, so taps register on a moving deck without the
+      300ms double-tap-zoom delay.
+    - Metric tiles 4-up, dropping to 2-up under 560px.
+    - Paired buttons stack to full width under 430px so labels never clip.
+    - Safe-area padding for notched phones; no horizontal overflow anywhere.
+
+    Monitor   connect, arm/disarm, live streaming plot
+    Data      upload a CSV and generate plots
+    Advanced  status detail, sampling + adaptive settings, Bluetooth CSV,
+              WiFi, firmware update, erase
+-->
+<style>
+  :root {
+    /* ground — warm off-white, less glare than pure white, still bright */
+    --bg:      #f6f5f2;
+    --card:    #ffffff;
+    --inset:   #faf9f7;
+    --sunk:    #f1efec;
+
+    /* borders — deliberately heavy so edges hold up in glare */
+    --line:    #d5d2cc;
+    --line-mid:#bdb9b1;
+    --line-hi: #8d8880;
+    --bw:      2px;
+
+    /* ink — nothing lighter than --faint, which is already dark for grey */
+    --ink:     #14161a;
+    --dim:     #4a4f56;
+    --faint:   #5f656c;
+
+    /* brand + state, all contrast-checked against white */
+    --brand:   #e07a00;   /* Shinkei orange, darkened from #FF9500 for AA on white */
+    --brand-sk:#fff4e6;
+    --green:   #147f3b;
+    --green-sk:#e8f6ec;
+    --amber:   #9a5b00;
+    --amber-sk:#fdf3e3;
+    --red:     #c0261c;
+    --red-sk:  #fdeceb;
+
+    /* data series — dark and saturated so they read on white outdoors */
+    --d-core:  #d94f04;
+    --d-amb:   #10559e;
+    --d-act:   #147f3b;
+    --d-exc:   #6a2b9c;
+    --d-peak:  #b56800;
+    --d-sd:    #4c5a63;
+
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, system-ui, sans-serif;
+    --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    --r:    12px;
+    --r-sm: 9px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.5;
+    min-height: 100vh;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: rgba(224,122,0,.15);
+    overflow-x: hidden;
+  }
+
+  /* ══ Header ══════════════════════════════════════════════════════════ */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    background: var(--card);
+    border-bottom: var(--bw) solid var(--line-mid);
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 16px;
+    padding-top: calc(13px + env(safe-area-inset-top));
+  }
+  .mark { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  /* The supplied mark is a cream fill on transparency, i.e. an alpha mask meant
+     for dark grounds. It is re-tinted to the ink colour here so it reads on the
+     light theme, and inlined as a data URI so this stays a single self-contained
+     file that works with no network on a boat. */
+  .mark .logo { width: 30px; height: auto; flex-shrink: 0; display: block; }
+  .mark .name {
+    font-size: 17px; font-weight: 650; letter-spacing: -0.2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .topbar .spacer { flex: 1 1 auto; }
+  .chip {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    background: var(--sunk); border: var(--bw) solid var(--line-mid);
+    border-radius: 999px; padding: 7px 14px 7px 11px;
+    font-size: 13px; font-weight: 600; color: var(--dim);
+  }
+  .chip.live { background: var(--green-sk); border-color: var(--green); color: var(--green); }
+  @media (max-width: 420px) {
+    .mark .name { font-size: 15px; }
+    .mark .logo { width: 26px; }
+    .chip { padding: 7px 11px 7px 9px; font-size: 12px; }
+  }
+
+  .wrap { max-width: 780px; margin: 0 auto; padding: 18px 16px 0; }
+
+  /* ══ Dots ════════════════════════════════════════════════════════════ */
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    background: #a9a49c; box-shadow: 0 0 0 2px rgba(0,0,0,.06) inset;
+    transition: background .2s;
+  }
+  .dot.on   { background: var(--green); }
+  .dot.busy { background: var(--brand); animation: blip 1.5s infinite; }
+  @keyframes blip { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  /* ══ Status strip ════════════════════════════════════════════════════ */
+  .strip {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--card); border: var(--bw) solid var(--line-mid);
+    border-radius: var(--r); padding: 14px 16px; margin-bottom: 16px;
+  }
+  #statusText { font-size: 15px; font-weight: 550; color: var(--dim); }
+  .tag {
+    display: none; font-size: 13px; font-weight: 650;
+    padding: 4px 10px; border-radius: 7px;
+    background: var(--sunk); border: 2px solid var(--line-mid); color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .tag.on { display: inline-block; }
+  .tag.green { color: var(--green); border-color: var(--green); background: var(--green-sk); }
+  .tag.amber { color: var(--amber); border-color: var(--amber); background: var(--amber-sk); }
+  .tag.red   { color: var(--red);   border-color: var(--red);   background: var(--red-sk); }
+
+  /* ══ Tabs ════════════════════════════════════════════════════════════ */
+  .tabs {
+    display: flex; gap: 6px; margin-bottom: 18px;
+  }
+  .tabs button {
+    flex: 1; min-height: 46px; cursor: pointer;
+    background: var(--card); border: var(--bw) solid var(--line-mid);
+    border-radius: var(--r-sm); color: var(--dim);
+    font-family: var(--sans); font-size: 15px; font-weight: 600;
+    padding: 10px 4px; touch-action: manipulation;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .tabs button.active {
+    background: var(--ink); border-color: var(--ink); color: #fff;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ══ Cards ═══════════════════════════════════════════════════════════ */
+  .card {
+    background: var(--card); border: var(--bw) solid var(--line-mid);
+    border-radius: var(--r); padding: 0 17px 17px; margin-bottom: 16px;
+  }
+  .card > .card-label {
+    font-size: 16px; font-weight: 680; letter-spacing: -0.2px; color: var(--ink);
+    padding: 15px 0 12px; margin-bottom: 16px;
+    border-bottom: var(--bw) solid var(--line);
+  }
+  .card.fault { border-color: var(--red); }
+  .card.fault > .card-label { color: var(--red); border-bottom-color: var(--red-sk); }
+
+  .note { font-size: 14px; color: var(--faint); line-height: 1.6; }
+  .note.warn { color: var(--amber); font-weight: 550; }
+  .note.good { color: var(--green); font-weight: 550; }
+  .note.bad  { color: var(--red);   font-weight: 550; }
+  .note + .note { margin-top: 8px; }
+  .note code { font-family: var(--mono); font-size: 13px; color: var(--ink);
+               background: var(--sunk); padding: 1px 5px; border-radius: 4px; }
+  .note em { font-style: normal; font-weight: 650; color: var(--dim); }
+
+  /* ══ Buttons ═════════════════════════════════════════════════════════
+     Size deliberately unchanged from 2.2.0. The min-height only guarantees a
+     44px tap target, which the previous padding was 4px short of. ══════════ */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%; min-height: 44px;
+    font-family: var(--sans); font-size: 14px; font-weight: 650;
+    padding: 11px 14px; border-radius: var(--r-sm);
+    border: var(--bw) solid var(--line-hi);
+    background: var(--card); color: var(--ink);
+    cursor: pointer; touch-action: manipulation;
+    transition: background .12s, border-color .12s;
+  }
+  .btn:hover:not(:disabled)  { background: var(--sunk); border-color: var(--ink); }
+  .btn:active:not(:disabled) { background: var(--line); }
+  .btn:disabled { opacity: .38; cursor: not-allowed; }
+
+  /* Dark ink on the orange, not white. White on this orange is only 3.0:1,
+     which fails AA at this text size; dark ink on it is ~6:1 and lets the brand
+     colour stay vivid instead of being darkened into a brown. */
+  .btn.primary { background: var(--brand); border-color: #b86400; color: var(--ink); }
+  .btn.primary:hover:not(:disabled)  { background: #f08800; border-color: #b86400; }
+  .btn.primary:active:not(:disabled) { background: #c96d00; }
+  .btn.stop  { background: var(--card); color: var(--amber); border-color: var(--amber); }
+  .btn.stop:hover:not(:disabled)  { background: var(--amber-sk); }
+  .btn.fault { background: var(--card); color: var(--red); border-color: var(--red); }
+  .btn.fault:hover:not(:disabled) { background: var(--red-sk); }
+
+  #btnConnect {
+    min-height: 56px; font-size: 17px; font-weight: 700; margin-bottom: 16px;
+  }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row2 .span2 { grid-column: span 2; }
+  .stack { display: grid; gap: 12px; }
+  /* Stack paired buttons on narrow phones so labels never clip mid-word. */
+  @media (max-width: 430px) {
+    .row2 { grid-template-columns: 1fr; }
+    .row2 .span2 { grid-column: span 1; }
+  }
+
+  /* ══ Metric tiles ════════════════════════════════════════════════════ */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  @media (max-width: 560px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+  .metric {
+    background: var(--inset); border: var(--bw) solid var(--line);
+    border-radius: var(--r-sm); padding: 12px 12px 11px; min-width: 0;
+  }
+  .metric .m-label {
+    font-size: 12.5px; font-weight: 650; color: var(--faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .metric .m-value {
+    font-family: var(--mono); font-size: 23px; font-weight: 600;
+    font-variant-numeric: tabular-nums; margin-top: 6px; line-height: 1.15;
+  }
+  .m-value.core { color: var(--d-core); }
+  .m-value.amb  { color: var(--d-amb); }
+  .m-value.dt   { color: var(--d-exc); }
+  .m-value.act  { color: var(--d-act); }
+  /* The rail is not decoration: the fill shows where the value sits in range. */
+  .metric .track {
+    margin-top: 10px; height: 5px; background: var(--line);
+    border-radius: 3px; overflow: hidden;
+  }
+  .metric .fill { display: block; height: 100%; width: 0%; background: var(--line-hi);
+                  border-radius: 3px; transition: width .3s; }
+  .metric.core .fill { background: var(--d-core); }
+  .metric.amb  .fill { background: var(--d-amb); }
+  .metric.dt   .fill { background: var(--d-exc); }
+  .metric.act  .fill { background: var(--d-act); }
+
+  /* ══ Key/value list ══════════════════════════════════════════════════ */
+  .kvrow {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+    padding: 12px 0; border-bottom: 2px solid var(--line);
+  }
+  .kvrow:last-child { border-bottom: none; }
+  .kvrow .k { font-size: 14.5px; color: var(--dim); font-weight: 550; }
+  .kvrow .v {
+    font-family: var(--mono); font-size: 14.5px; font-weight: 600; color: var(--ink);
+    font-variant-numeric: tabular-nums; text-align: right; word-break: break-word;
+  }
+  .kvrow .v.muted { color: #7c8188; }
+  .kvrow .v.green { color: var(--green); }
+  .kvrow .v.red   { color: var(--red); }
+
+  /* ══ Inputs — 16px prevents iOS zoom-on-focus ════════════════════════ */
+  .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .field label { font-size: 13.5px; font-weight: 650; color: var(--dim); }
+  .field .sub { font-size: 13px; color: var(--faint); }
+  input[type=text], input[type=password], input[type=number] {
+    width: 100%; min-height: 46px; padding: 11px 13px;
+    border: var(--bw) solid var(--line-mid); border-radius: var(--r-sm);
+    background: var(--card); color: var(--ink);
+    font-family: var(--mono); font-size: 16px; font-weight: 600;
+  }
+  input:focus { outline: 3px solid var(--brand-sk); border-color: var(--brand); }
+  input[type=file] {
+    width: 100%; font-family: var(--sans); font-size: 14px; color: var(--dim);
+    padding: 12px; border: var(--bw) dashed var(--line-mid);
+    border-radius: var(--r-sm); background: var(--inset);
+  }
+
+  .switch {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding-bottom: 16px; margin-bottom: 16px; border-bottom: var(--bw) solid var(--line);
+  }
+  .switch .sw-text strong { font-size: 15.5px; font-weight: 680; }
+  .switch .sw-text div { font-size: 13.5px; color: var(--faint); margin-top: 5px; line-height: 1.55; }
+  .toggle {
+    flex-shrink: 0; width: 58px; height: 34px; border-radius: 999px;
+    background: var(--sunk); border: var(--bw) solid var(--line-hi);
+    position: relative; cursor: pointer; touch-action: manipulation;
+    transition: background .18s, border-color .18s;
+  }
+  .toggle::after {
+    content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px;
+    border-radius: 50%; background: #8d8880; transition: transform .18s, background .18s;
+  }
+  .toggle.on { background: var(--green-sk); border-color: var(--green); }
+  .toggle.on::after { transform: translateX(24px); background: var(--green); }
+  .toggle:disabled { opacity: .38; cursor: not-allowed; }
+
+  /* ══ Progress ════════════════════════════════════════════════════════ */
+  .prog { display: none; margin-top: 15px; }
+  .prog.active { display: block; }
+  .prog .lab {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: 13.5px; font-weight: 650; color: var(--dim); margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .prog .bar {
+    height: 10px; background: var(--sunk); border: 2px solid var(--line-mid);
+    border-radius: 6px; overflow: hidden;
+  }
+  .prog .fill { display: block; height: 100%; width: 0%; background: var(--ink); transition: width .2s; }
+  .prog .fill.amber { background: var(--brand); }
+
+  /* ══ Notices ═════════════════════════════════════════════════════════ */
+  .notice {
+    font-size: 13.5px; line-height: 1.6; padding: 13px 14px; margin-bottom: 16px;
+    border: var(--bw) solid var(--amber); border-radius: var(--r-sm);
+    background: var(--amber-sk); color: #6f4200;
+  }
+  .notice.hidden { display: none; }
+  .notice strong { color: var(--amber); }
+  .notice code { font-family: var(--mono); font-size: 13px; background: #fff;
+                 padding: 1px 5px; border-radius: 4px; }
+  .notice a { color: var(--amber); font-weight: 650; }
+  .banner {
+    display: none; padding: 15px; margin-bottom: 16px;
+    border: var(--bw) solid var(--red); border-radius: var(--r-sm);
+    background: var(--red-sk); font-size: 14.5px; line-height: 1.55; color: var(--ink);
+  }
+  .banner.show { display: block; }
+  .banner strong { color: var(--red); }
+  .banner .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .banner .acts .btn { background: #fff; }
+  .linkout {
+    display: none; text-align: center; padding: 14px; margin-top: 12px;
+    min-height: 48px; border-radius: var(--r-sm);
+    border: var(--bw) solid var(--green); background: var(--green-sk);
+    color: var(--green); font-weight: 700; font-size: 15px; text-decoration: none;
+  }
+  .linkout.show { display: block; }
+  ol.steps { margin: 0 0 16px 20px; }
+  ol.steps li { font-size: 14px; color: var(--faint); line-height: 1.6; margin-bottom: 7px; }
+  ol.steps code { font-family: var(--mono); font-size: 13px; background: var(--sunk);
+                  padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+  ol.steps em { font-style: normal; font-weight: 650; color: var(--dim); }
+
+  /* ══ Charts ══════════════════════════════════════════════════════════ */
+  .chart-wrap { position: relative; width: 100%; height: 250px; }
+  .chart-wrap.live { height: 270px; }
+  @media (max-width: 480px) {
+    .chart-wrap { height: 225px; }
+    .chart-wrap.live { height: 240px; }
+  }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 12px;
+    font-size: 13px; font-weight: 600; color: var(--dim);
+  }
+  .legend span { display: flex; align-items: center; gap: 7px; }
+  .sw { width: 16px; height: 4px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+  .sw.dash {
+    background-image: repeating-linear-gradient(90deg, currentColor 0 5px, transparent 5px 9px);
+    background-color: transparent !important; color: inherit; height: 3px;
+  }
+  .plot { margin-top: 26px; padding-top: 22px; border-top: var(--bw) solid var(--line); }
+  .plot:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+  .plot-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 11px;
+  }
+  .plot-title { font-size: 15px; font-weight: 680; letter-spacing: -0.15px; }
+  .btn-png {
+    flex-shrink: 0; width: auto; min-height: 38px; padding: 8px 13px;
+    font-family: var(--sans); font-size: 13px; font-weight: 650; color: var(--dim);
+    background: var(--card); border: var(--bw) solid var(--line-mid);
+    border-radius: 7px; cursor: pointer; touch-action: manipulation;
+  }
+  .btn-png:hover { color: var(--ink); border-color: var(--ink); }
+
+  #csvFileInput { display: none; }
+  #btnUploadCsv {
+    display: block; width: 100%; min-height: 56px; padding: 17px;
+    text-align: center; cursor: pointer; touch-action: manipulation;
+    background: var(--inset); border: var(--bw) dashed var(--line-hi);
+    border-radius: var(--r-sm); color: var(--dim); font-size: 15px; font-weight: 650;
+  }
+  #btnUploadCsv:hover { color: var(--ink); border-color: var(--ink); background: var(--sunk); }
+  #csvFileName { font-family: var(--mono); font-size: 13px; color: var(--faint);
+                 margin-top: 11px; text-align: center; word-break: break-all; }
+  #csvSummary { display: none; font-size: 13.5px; color: var(--faint); line-height: 1.65;
+                margin-top: 13px; padding-top: 13px; border-top: var(--bw) solid var(--line); }
+  #csvCharts { display: none; margin-top: 22px; }
+  #btnDownloadAllCharts { margin-top: 22px; }
+
+  /* ══ Console log ═════════════════════════════════════════════════════ */
+  #terminal {
+    background: var(--inset); border: var(--bw) solid var(--line);
+    border-radius: var(--r-sm); font-family: var(--mono);
+    font-size: 13px; line-height: 1.6; padding: 13px;
+    height: 230px; overflow-y: auto; color: #2c3138;
+    white-space: pre-wrap; word-break: break-word;
+    overscroll-behavior: contain;          /* stops the page scrolling with it on touch */
+    -webkit-overflow-scrolling: touch;
+  }
+  .t-muted  { color: #6b7178; }
+  .t-good   { color: var(--green);  font-weight: 600; }
+  .t-warn   { color: var(--amber);  font-weight: 600; }
+  .t-danger { color: var(--red);    font-weight: 600; }
+  .t-live   { color: var(--d-amb);  font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ══ Header ═══════════════════════════════════════════════════════════ -->
+<div class="topbar">
+  <div class="mark">
+    <img class="logo" src="data:image/png;base64,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"
+         width="128" height="125" alt="Shinkei">
+    <div class="name">Fish Biologger</div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="chip" id="hdrChip">
+    <span class="dot" id="hdrDot"></span>
+    <span id="hdrText">Offline</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <button id="btnConnect" class="btn primary">Connect via Bluetooth</button>
+
+  <div class="strip">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Not connected</span>
+    <span class="tag" id="recBadge"></span>
+    <span class="tag" id="fwBadge"></span>
+    <span class="tag amber" id="modeBadge"></span>
+    <span class="tag red" id="fullBadge">Storage full</span>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="monitor" class="active">Monitor</button>
+    <button data-tab="data">Data</button>
+    <button data-tab="advanced">Advanced</button>
+  </div>
+
+  <!-- ══════════════ MONITOR ══════════════════════════════════════════ -->
+  <div class="tab-panel active" id="tab-monitor">
+
+    <div class="card">
+      <div class="card-label">Deployment</div>
+      <div class="row2">
+        <button id="btnStart" class="btn" disabled>Start Logging</button>
+        <button id="btnStop"  class="btn stop" disabled>Stop Logging</button>
+      </div>
+      <p class="note" style="margin-top:14px;">
+        Start arms the logger and writes that state to flash, so a power glitch
+        resumes logging instead of ending the deployment. While deployed it sleeps
+        between samples and opens a Bluetooth window for about 10 seconds every
+        2.5 minutes — if Connect does not find it at once, leave the dialog open
+        and wait for the next window.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Live Readout</div>
+
+      <div class="metrics">
+        <div class="metric core">
+          <div class="m-label">Internal °C</div>
+          <div class="m-value core" id="rvCore">--.-</div>
+          <span class="track"><span class="fill" id="barCore"></span></span>
+        </div>
+        <div class="metric amb">
+          <div class="m-label">Ambient °C</div>
+          <div class="m-value amb" id="rvAmb">--.-</div>
+          <span class="track"><span class="fill" id="barAmb"></span></span>
+        </div>
+        <div class="metric dt">
+          <div class="m-label">Δ Excess °C</div>
+          <div class="m-value dt" id="rvDt">--.-</div>
+          <span class="track"><span class="fill" id="barDt"></span></span>
+        </div>
+        <div class="metric act">
+          <div class="m-label">Activity mg</div>
+          <div class="m-value act" id="rvAct">----</div>
+          <span class="track"><span class="fill" id="barAct"></span></span>
+        </div>
+      </div>
+
+      <div class="row2">
+        <button id="btnStream"  class="btn primary" disabled>Start Live Plot</button>
+        <button id="btnLiveOne" class="btn" disabled>Single Reading</button>
+      </div>
+
+      <div class="legend" style="margin-top:20px;">
+        <span><span class="sw" style="background:#d94f04"></span>Internal °C</span>
+        <span><span class="sw dash" style="color:#10559e"></span>Ambient °C</span>
+        <span><span class="sw" style="background:#147f3b"></span>Activity, right axis</span>
+      </div>
+      <div class="chart-wrap live"><canvas id="chartLive" role="img" aria-label="Live temperature and activity"></canvas></div>
+
+      <p class="note" style="margin-top:14px;" id="streamHint">
+        Streaming pushes a reading about once a second and holds the board awake
+        while it runs, so use it for bench checks rather than during a deployment.
+        It stops automatically after 5 minutes.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Activity Log</div>
+      <div id="terminal"><span class="t-muted">Ready. Press Connect to begin.
+</span></div>
+    </div>
+  </div>
+
+  <!-- ══════════════ DATA ═════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-data">
+    <div class="card">
+      <div class="card-label">Plot a CSV file</div>
+      <label id="btnUploadCsv" for="csvFileInput">Upload CSV &amp; generate plots</label>
+      <input type="file" id="csvFileInput" accept=".csv,.txt,text/csv,text/plain">
+      <div id="csvFileName"></div>
+      <div id="csvSummary"></div>
+
+      <div id="csvCharts">
+        <div class="plot">
+          <div class="plot-head">
+            <div class="plot-title">Internal &amp; Ambient Temperature</div>
+            <button class="btn-png" data-chart="temp" type="button">PNG</button>
+          </div>
+          <div class="legend">
+            <span><span class="sw" style="background:#d94f04"></span>Internal</span>
+            <span><span class="sw dash" style="color:#10559e"></span>Ambient</span>
+          </div>
+          <div class="chart-wrap"><canvas id="chartTemp" role="img" aria-label="Internal and ambient temperature over time"></canvas></div>
+        </div>
+
+        <div class="plot">
+          <div class="plot-head">
+            <div class="plot-title">Thermal Excess</div>
+            <button class="btn-png" data-chart="excess" type="button">PNG</button>
+          </div>
+          <div class="legend">
+            <span><span class="sw" style="background:#6a2b9c"></span>Internal minus ambient</span>
+          </div>
+          <div class="chart-wrap"><canvas id="chartExcess" role="img" aria-label="Thermal excess over time"></canvas></div>
+        </div>
+
+        <div class="plot">
+          <div class="plot-head">
+            <div class="plot-title">Acceleration</div>
+            <button class="btn-png" data-chart="accel" type="button">PNG</button>
+          </div>
+          <div class="legend">
+            <span><span class="sw" style="background:#b56800"></span>Peak</span>
+            <span><span class="sw" style="background:#147f3b"></span>Mean</span>
+            <span><span class="sw dash" style="color:#4c5a63"></span>SD</span>
+          </div>
+          <div class="chart-wrap"><canvas id="chartAccel" role="img" aria-label="Mean, peak and standard deviation of acceleration over time"></canvas></div>
+        </div>
+
+        <div class="plot">
+          <div class="plot-head">
+            <div class="plot-title">Temperature &amp; Acceleration</div>
+            <button class="btn-png" data-chart="combined" type="button">PNG</button>
+          </div>
+          <div class="legend">
+            <span><span class="sw" style="background:#d94f04"></span>Internal</span>
+            <span><span class="sw dash" style="color:#10559e"></span>Ambient</span>
+            <span><span class="sw" style="background:#147f3b"></span>Mean accel</span>
+            <span><span class="sw" style="background:#b56800"></span>Peak accel</span>
+          </div>
+          <div class="chart-wrap"><canvas id="chartCombined" role="img" aria-label="Temperature and acceleration overlaid over time"></canvas></div>
+        </div>
+
+        <button id="btnDownloadAllCharts" class="btn" type="button">Download All Charts (PNG)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ ADVANCED ═════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-advanced">
+
+    <div class="card">
+      <div class="card-label">Status</div>
+      <div>
+        <div class="kvrow"><span class="k">Firmware</span><span class="v muted" id="kvFw">—</span></div>
+        <div class="kvrow"><span class="k">State</span><span class="v muted" id="kvState">—</span></div>
+        <div class="kvrow"><span class="k">Records stored</span><span class="v muted" id="kvRecords">—</span></div>
+        <div class="kvrow"><span class="k">Flash used</span><span class="v muted" id="kvFlash">—</span></div>
+        <div class="kvrow"><span class="k">Interval in effect</span><span class="v muted" id="kvInterval">—</span></div>
+        <div class="kvrow"><span class="k">Adaptive</span><span class="v muted" id="kvAdaptive">—</span></div>
+        <div class="kvrow"><span class="k">Quiet timer</span><span class="v muted" id="kvQuiet">—</span></div>
+        <div class="kvrow"><span class="k">OTA capable</span><span class="v muted" id="kvOta">—</span></div>
+      </div>
+      <button id="btnStatus" class="btn" style="margin-top:16px;" disabled>Refresh Status</button>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Sampling</div>
+
+      <div class="switch">
+        <div class="sw-text">
+          <strong>Adaptive sampling</strong>
+          <div>Sample fast while something is happening, slowly when nothing is.
+               Requires both a still accelerometer and stable temperatures before
+               slowing down, and returns to the fast rate on the first sample that
+               is not quiet.</div>
+        </div>
+        <button class="toggle" id="tgAdaptive" disabled aria-label="Toggle adaptive sampling"></button>
+      </div>
+
+      <div class="notice" id="adaptCalNotice">
+        <strong>Calibrate the activity threshold before trusting this.</strong>
+        The default 40 mg is a guess, not a measurement. Log your animal at rest
+        and during normal activity with adaptive off, plot <code>accel_sd_mg</code>,
+        then set the threshold above the resting band and well below the active
+        band. The <code>slow_mode</code> column records which rate produced every
+        sample, so the decision stays auditable after the fact.
+      </div>
+
+      <div class="row2" style="gap:14px;">
+        <div class="field">
+          <label for="inFast">Fast interval, seconds</label>
+          <input type="number" id="inFast" min="5" max="3600" step="1" inputmode="numeric">
+          <span class="sub">When active</span>
+        </div>
+        <div class="field">
+          <label for="inSlow">Slow interval, seconds</label>
+          <input type="number" id="inSlow" min="5" max="3600" step="1" inputmode="numeric">
+          <span class="sub">When quiet</span>
+        </div>
+        <div class="field">
+          <label for="inSd">Activity threshold, mg</label>
+          <input type="number" id="inSd" min="1" max="4000" step="1" inputmode="numeric">
+          <span class="sub">accel_sd_mg below this counts as still</span>
+        </div>
+        <div class="field">
+          <label for="inTemp">Temp tolerance, °C</label>
+          <input type="number" id="inTemp" min="0.01" max="50" step="0.01" inputmode="decimal">
+          <span class="sub">Drift from reference counts as changed</span>
+        </div>
+        <div class="field span2">
+          <label for="inQuiet">Quiet period before slowing, seconds</label>
+          <input type="number" id="inQuiet" min="30" max="43200" step="1" inputmode="numeric">
+          <span class="sub">How long everything must stay quiet before relaxing to the slow rate</span>
+        </div>
+      </div>
+
+      <button id="btnSaveSampling" class="btn" style="margin-top:16px;" disabled>Save sampling settings</button>
+      <p class="note" style="margin-top:12px;" id="samplingHint">
+        Saved to the logger’s flash and applied on the next sample.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Download over Bluetooth</div>
+      <p class="note" style="margin-bottom:15px;">
+        Works anywhere, no network needed, but slow for large logs. Prefer the
+        WiFi download below when a network is available.
+      </p>
+      <button id="btnDump" class="btn" disabled>Download CSV over Bluetooth</button>
+      <div class="prog" id="progressWrap">
+        <div class="lab"><span>Transferring</span><span id="progressCount">0 records</span></div>
+        <div class="bar"><span class="fill" id="progressFill"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">WiFi</div>
+      <p class="note" style="margin-bottom:15px;">
+        Use a phone personal hotspot or a plain WPA2 network. WPA2-Enterprise
+        (username and password) and captive-portal networks will not work.
+        Credentials are saved on the logger, so later sessions can just use
+        <em>Saved network</em>.
+      </p>
+      <div class="stack">
+        <div class="field">
+          <label for="wifiSSID">Network name (SSID)</label>
+          <input type="text" id="wifiSSID" autocomplete="off" autocapitalize="none"
+                 spellcheck="false" placeholder="MyHotspot">
+        </div>
+        <div class="field">
+          <label for="wifiPass">Password</label>
+          <input type="password" id="wifiPass" autocomplete="off" autocapitalize="none"
+                 spellcheck="false" placeholder="••••••••">
+        </div>
+      </div>
+      <div class="row2" style="margin-top:15px;">
+        <button id="btnConnectWifi"  class="btn primary" disabled>Connect &amp; save</button>
+        <button id="btnUseSavedWifi" class="btn" disabled>Saved network</button>
+        <button id="btnScanWifi"     class="btn" disabled>Scan networks</button>
+        <button id="btnWifiOff"      class="btn" disabled>WiFi off</button>
+      </div>
+      <div id="wifiStatus" class="note" style="margin-top:15px;">Not connected to WiFi.</div>
+      <a id="wifiLink" class="linkout" href="#" target="_blank" rel="noopener">Download CSV over WiFi</a>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Firmware Update over WiFi</div>
+
+      <div class="notice hidden" id="otaHttpsNotice">
+        This page is loaded over <strong>https</strong>, so the browser will block
+        an upload to the logger's plain-http address. Either open this file locally
+        (<code>file://</code>) or use the logger's own update page:
+        <a id="otaDirectLink" href="#" target="_blank" rel="noopener">open update page</a>.
+      </div>
+
+      <ol class="steps">
+        <li>Connect the logger to WiFi in the card above.</li>
+        <li>Arduino IDE: <em>Sketch → Export Compiled Binary</em>, then find the
+            <code>.ino.bin</code> in the sketch's <code>build</code> folder.</li>
+        <li>Pick it below and upload. The board verifies the image before switching
+            to it and reboots on success — a bad or truncated upload is rejected and
+            the current firmware keeps running.</li>
+      </ol>
+
+      <div class="stack">
+        <div class="field">
+          <label for="otaFileInput">Firmware image (.bin)</label>
+          <input type="file" id="otaFileInput" accept=".bin,application/octet-stream">
+        </div>
+        <div class="field">
+          <label for="otaHost">Logger address</label>
+          <input type="text" id="otaHost" placeholder="192.168.4.2" autocomplete="off"
+                 autocapitalize="none" spellcheck="false" inputmode="decimal">
+        </div>
+      </div>
+
+      <div class="row2" style="margin-top:15px;">
+        <button id="btnOtaPrepare" class="btn" disabled>Bring WiFi up</button>
+        <button id="btnOtaUpload"  class="btn stop">Upload firmware</button>
+      </div>
+
+      <div class="prog" id="otaProgressWrap">
+        <div class="lab"><span id="otaProgressLabel">Uploading</span><span id="otaProgressPct">0%</span></div>
+        <div class="bar"><span class="fill amber" id="otaProgressFill"></span></div>
+      </div>
+
+      <div id="otaStatus" class="note" style="margin-top:15px;">Waiting for a WiFi connection.</div>
+      <a id="otaDirectLink2" class="linkout" href="#" target="_blank" rel="noopener">Open the logger's own update page</a>
+    </div>
+
+    <div class="card fault">
+      <div class="card-label">Danger zone</div>
+      <div class="banner" id="eraseBanner">
+        <strong>This permanently erases all logged data.</strong><br>
+        It cannot be undone. Download anything you need first.
+        <div class="acts">
+          <button class="btn fault" id="btnEraseYes">Yes, erase</button>
+          <button class="btn" id="btnEraseNo">Cancel</button>
+        </div>
+      </div>
+      <button id="btnErase" class="btn fault" disabled>Erase all logged data</button>
+      <p class="note" style="margin-top:12px;">
+        Also disarms logging and clears the resume-on-reset flag.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   0. Constants, DOM
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SVC_UUID  = "19b10000-e8f2-537e-4f6c-d104768a1214";
+const CMD_UUID  = "19b10001-e8f2-537e-4f6c-d104768a1214";
+const DATA_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
+
+const LIVE_WINDOW_POINTS = 150;   // ~2.5 min at 1 Hz
+
+// One palette for both the on-screen charts and the PNG exports. Both grounds
+// are light now, so there is no reason to maintain two sets that can drift.
+// Hues are dark and saturated enough to stay legible on a phone in sunlight.
+const C = {
+  core: '#d94f04', amb: '#10559e', act: '#147f3b',
+  excess: '#6a2b9c', peak: '#b56800', sd: '#4c5a63',
+  ink: '#14161a', tick: '#4a4f56', grid: 'rgba(0,0,0,0.10)'
+};
+
+// Rails on the metric tiles show where a value sits in a plausible range.
+const RAIL = { core: [0, 40], amb: [0, 40], dt: [-2, 8], act: [0, 2500] };
+
+const $ = (id) => document.getElementById(id);
+
+const CONTROL_IDS = [
+  'btnStart','btnStop','btnStream','btnLiveOne','btnStatus','btnDump',
+  'btnErase','tgAdaptive','btnSaveSampling','btnConnectWifi','btnUseSavedWifi',
+  'btnScanWifi','btnWifiOff','btnOtaPrepare'
+];
+
+const el = {
+  connect: $('btnConnect'), dot: $('statusDot'), statusText: $('statusText'),
+  recBadge: $('recBadge'), fwBadge: $('fwBadge'), modeBadge: $('modeBadge'),
+  fullBadge: $('fullBadge'), terminal: $('terminal'),
+  hdrChip: $('hdrChip'), hdrDot: $('hdrDot'), hdrText: $('hdrText'),
+
+  rvCore: $('rvCore'), rvAmb: $('rvAmb'), rvDt: $('rvDt'), rvAct: $('rvAct'),
+  barCore: $('barCore'), barAmb: $('barAmb'), barDt: $('barDt'), barAct: $('barAct'),
+  btnStream: $('btnStream'), streamHint: $('streamHint'),
+
+  kvFw: $('kvFw'), kvState: $('kvState'), kvRecords: $('kvRecords'),
+  kvFlash: $('kvFlash'), kvInterval: $('kvInterval'), kvAdaptive: $('kvAdaptive'),
+  kvQuiet: $('kvQuiet'), kvOta: $('kvOta'),
+
+  tgAdaptive: $('tgAdaptive'), adaptNotice: $('adaptCalNotice'),
+  inFast: $('inFast'), inSlow: $('inSlow'), inSd: $('inSd'),
+  inTemp: $('inTemp'), inQuiet: $('inQuiet'), samplingHint: $('samplingHint'),
+
+  progressWrap: $('progressWrap'), progressFill: $('progressFill'),
+  progressCnt: $('progressCount'),
+
+  wifiSSID: $('wifiSSID'), wifiPass: $('wifiPass'),
+  wifiStatus: $('wifiStatus'), wifiLink: $('wifiLink'),
+
+  otaFile: $('otaFileInput'), otaHost: $('otaHost'), otaStatus: $('otaStatus'),
+  otaWrap: $('otaProgressWrap'), otaFill: $('otaProgressFill'),
+  otaPct: $('otaProgressPct'), otaLabel: $('otaProgressLabel'),
+  otaHttps: $('otaHttpsNotice'), otaLink1: $('otaDirectLink'), otaLink2: $('otaDirectLink2'),
+
+  eraseBanner: $('eraseBanner')
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. Log + tabs
+   ═══════════════════════════════════════════════════════════════════════════ */
+function log(msg, cls) {
+  const span = document.createElement('span');
+  if (cls) span.className = cls;
+  span.textContent = msg;
+  el.terminal.appendChild(span);
+  // Keep the log from growing without bound over a long session.
+  while (el.terminal.childNodes.length > 600) el.terminal.removeChild(el.terminal.firstChild);
+  el.terminal.scrollTop = el.terminal.scrollHeight;
+}
+const logLine = (msg, cls) => log(msg + '\n', cls);
+
+document.querySelectorAll('.tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+    btn.classList.add('active');
+    $('tab-' + btn.dataset.tab).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });   // phones: land at the top of the new tab
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. Device state
+   ═══════════════════════════════════════════════════════════════════════════ */
+const state = {
+  device: null, cmdChar: null, dataChar: null,
+  logging: false, records: 0, firmware: null, storageFull: false,
+  used: 0, total: 0,
+  intervalNow: null, adaptive: false, slowMode: false,
+  fastSec: null, slowSec: null, sdMg: null, tempC100: null, quietSec: null,
+  quietNow: 0, otaCapable: null,
+  wifiIp: null, streaming: false
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. BLE transport
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ble = (() => {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let rxBuffer = '';
+  let lineHandler = () => {};
+  let rawHandler = null;
+
+  async function connect() {
+    logLine('Requesting FishLogger…', 't-muted');
+    state.device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'FishLogger' }],
+      optionalServices: [SVC_UUID]
+    });
+    state.device.addEventListener('gattserverdisconnected', () => ui.onDisconnected());
+
+    logLine('Connecting…', 't-muted');
+    const server  = await state.device.gatt.connect();
+    const service = await server.getPrimaryService(SVC_UUID);
+    state.cmdChar  = await service.getCharacteristic(CMD_UUID);
+    state.dataChar = await service.getCharacteristic(DATA_UUID);
+    await state.dataChar.startNotifications();
+    state.dataChar.addEventListener('characteristicvaluechanged', onNotify);
+  }
+
+  function disconnect() {
+    if (state.device && state.device.gatt.connected) state.device.gatt.disconnect();
+  }
+  const isConnected = () => !!(state.device && state.device.gatt.connected);
+
+  function onNotify(event) {
+    const chunk = decoder.decode(event.target.value);
+    if (rawHandler) { rawHandler(chunk); return; }
+    rxBuffer += chunk;
+    let i;
+    while ((i = rxBuffer.indexOf('\n')) !== -1) {
+      const line = rxBuffer.slice(0, i).trim();
+      rxBuffer = rxBuffer.slice(i + 1);
+      if (line) lineHandler(line);
+    }
+  }
+
+  async function send(cmd) {
+    if (!state.cmdChar) { logLine('Not connected.', 't-warn'); return; }
+    logLine('→ ' + cmd, 't-muted');
+    try {
+      await state.cmdChar.writeValue(encoder.encode(cmd));
+    } catch (e) {
+      logLine('Send failed: ' + (e && e.message ? e.message : e), 't-danger');
+    }
+  }
+
+  return {
+    connect, disconnect, isConnected, send,
+    onLine: (fn) => { lineHandler = fn; },
+    // Hand any bytes already in the line buffer to the raw handler rather than
+    // discarding them — otherwise the first slice of the CSV header can be lost
+    // if it shared a notification with DUMPSTART.
+    captureRaw: (fn) => {
+      rawHandler = fn;
+      const leftover = rxBuffer; rxBuffer = '';
+      if (leftover) fn(leftover);
+    },
+    releaseRaw: () => { rawHandler = null; }
+  };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. Protocol
+   ═══════════════════════════════════════════════════════════════════════════ */
+ble.onLine((line) => {
+  const p = line.split('|');
+  const int = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+
+  switch (p[0]) {
+    // STATUS|state|records|used|total|fw|full|intervalNow|adaptive|slowNow
+    case 'STATUS':
+      state.logging     = p[1] === 'LOGGING';
+      state.records     = int(p[2]) || 0;
+      state.used        = int(p[3]) || 0;
+      state.total       = int(p[4]) || 0;
+      state.firmware    = p[5] || null;
+      state.storageFull = p[6] === '1';
+      state.intervalNow = int(p[7]);
+      state.adaptive    = p[8] === '1';
+      state.slowMode    = p[9] === '1';
+      ui.refresh();
+      logLine(`[Status] ${p[1]} · ${state.records} records · ` +
+              `${state.intervalNow}s interval` +
+              (state.adaptive ? ` · adaptive ${state.slowMode ? 'SLOW' : 'fast'}` : ' · fixed'),
+              't-good');
+      return;
+
+    // CFG|fast|slow|sdMg|tempC100|quietSec|quietNow|otaCapable
+    case 'CFG':
+      state.fastSec    = int(p[1]);
+      state.slowSec    = int(p[2]);
+      state.sdMg       = int(p[3]);
+      state.tempC100   = int(p[4]);
+      state.quietSec   = int(p[5]);
+      state.quietNow   = int(p[6]) || 0;
+      state.otaCapable = p[7] === '1';
+      ui.fillSamplingForm();
+      ui.refresh();
+      return;
+
+    // LIVE|tc|amb|x|y|z|mag
+    case 'LIVE': {
+      const tc  = parseFloat(p[1]);
+      const amb = parseFloat(p[2]);
+      const mag = int(p[6]);
+      livePlot.push(tc, amb, mag);
+      if (!state.streaming) {
+        const f = (v) => (v === -99 ? '--.-' : v.toFixed(2));
+        logLine(`[Live] core=${f(tc)}°C  amb=${f(amb)}°C  |a|=${mag} mg`, 't-live');
+      }
+      return;
+    }
+
+    case 'STREAM':
+      state.streaming = p[1] === 'ON';
+      ui.refreshStreamButton();
+      ui.refresh();
+      if (p[1] === 'ON') logLine('[Stream] started', 't-good');
+      else logLine('[Stream] stopped' + (p[2] ? ' (' + p[2] + ')' : ''), 't-warn');
+      return;
+
+    case 'DUMPSTART':  dump.begin(int(p[1]) || 0); return;
+    case 'PONG':       state.firmware = p[1] || null; ui.refresh(); return;
+    case 'WIFI':       wifi.onMessage(p); return;
+    case 'OTA':        ota.onMessage(p); return;
+
+    default:
+      logLine('[Logger] ' + line, 't-muted');
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. Live streaming plot
+   ═══════════════════════════════════════════════════════════════════════════ */
+const livePlot = (() => {
+  const labels = [], sCore = [], sAmb = [], sAct = [];
+  let chart = null;
+
+  function build() {
+    if (chart) return chart;
+    chart = new Chart($('chartLive'), {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'Internal °C', data: sCore, borderColor: C.core, backgroundColor: 'transparent',
+          borderWidth: 2.4, pointRadius: 0, tension: 0.25, yAxisID: 'yT', spanGaps: true },
+        { label: 'Ambient °C', data: sAmb, borderColor: C.amb, backgroundColor: 'transparent',
+          borderWidth: 2.4, pointRadius: 0, borderDash: [6, 4], tension: 0.25, yAxisID: 'yT', spanGaps: true },
+        { label: 'Activity mg', data: sAct, borderColor: C.act, backgroundColor: 'rgba(20,127,59,0.10)',
+          borderWidth: 1.8, pointRadius: 0, fill: true, tension: 0.2, yAxisID: 'yA', spanGaps: true }
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: false,                    // 1 Hz updates must not animate
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: C.tick, maxTicksLimit: 6, autoSkip: true, font: { size: 11 } },
+               grid: { display: false } },
+          yT: { position: 'left', title: { display: true, text: '°C', color: C.tick, font: { size: 12 } },
+                ticks: { color: C.tick, font: { size: 11 } }, grid: { color: C.grid } },
+          yA: { position: 'right', title: { display: true, text: 'mg', color: C.tick, font: { size: 12 } },
+                ticks: { color: C.tick, font: { size: 11 } }, grid: { display: false }, beginAtZero: true }
+        }
+      }
+    });
+    return chart;
+  }
+
+  const railPct = (v, [lo, hi]) =>
+    Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)).toFixed(1) + '%';
+
+  function push(tc, amb, mag) {
+    // -99 is the firmware's sentinel for a failed read; plot it as a gap rather
+    // than as a real -99 °C point that would wreck the axis scale.
+    const core = (tc === -99 || !Number.isFinite(tc)) ? null : tc;
+    const ambV = (amb === -99 || !Number.isFinite(amb)) ? null : amb;
+    const act  = Number.isFinite(mag) ? mag : null;
+
+    labels.push(new Date().toTimeString().slice(0, 8));
+    sCore.push(core); sAmb.push(ambV); sAct.push(act);
+
+    while (labels.length > LIVE_WINDOW_POINTS) {
+      labels.shift(); sCore.shift(); sAmb.shift(); sAct.shift();
+    }
+    build().update('none');
+
+    const dt = (core === null || ambV === null) ? null : core - ambV;
+    el.rvCore.textContent = core === null ? '--.-' : core.toFixed(2);
+    el.rvAmb.textContent  = ambV === null ? '--.-' : ambV.toFixed(2);
+    el.rvDt.textContent   = dt === null ? '--.-' : dt.toFixed(2);
+    el.rvAct.textContent  = act === null ? '----' : String(act);
+
+    el.barCore.style.width = core === null ? '0%' : railPct(core, RAIL.core);
+    el.barAmb.style.width  = ambV === null ? '0%' : railPct(ambV, RAIL.amb);
+    el.barDt.style.width   = dt   === null ? '0%' : railPct(dt,   RAIL.dt);
+    el.barAct.style.width  = act  === null ? '0%' : railPct(act,  RAIL.act);
+  }
+
+  function clear() {
+    labels.length = 0; sCore.length = 0; sAmb.length = 0; sAct.length = 0;
+    if (chart) chart.update('none');
+    el.rvCore.textContent = el.rvAmb.textContent = el.rvDt.textContent = '--.-';
+    el.rvAct.textContent = '----';
+    [el.barCore, el.barAmb, el.barDt, el.barAct].forEach((b) => { b.style.width = '0%'; });
+  }
+
+  return { push, clear, build };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. UI
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ui = (() => {
+  const setTag = (node, text, on) => {
+    node.textContent = text;
+    node.classList.toggle('on', !!on);
+  };
+
+  function refresh() {
+    const c = ble.isConnected();
+
+    el.dot.className = 'dot' + (c ? (state.logging ? ' busy' : ' on') : '');
+    el.statusText.textContent = !c ? 'Not connected'
+      : state.logging ? 'Connected — logging active' : 'Connected — idle';
+
+    el.hdrDot.className = 'dot' + (c ? ' on' : '');
+    el.hdrText.textContent = c ? 'Online' : 'Offline';
+    el.hdrChip.className = 'chip' + (c ? ' live' : '');
+
+    setTag(el.recBadge, state.records.toLocaleString() + ' records', state.records > 0);
+    setTag(el.fwBadge, 'v' + state.firmware, !!state.firmware);
+    setTag(el.modeBadge,
+      state.adaptive ? (state.slowMode ? 'Adaptive · slow' : 'Adaptive · fast') : '',
+      state.adaptive && c);
+    el.fullBadge.classList.toggle('on', state.storageFull);
+
+    const set = (node, text, cls) => {
+      node.textContent = text;
+      node.className = 'v ' + (cls || 'muted');
+    };
+    set(el.kvFw, state.firmware || '—', state.firmware ? '' : 'muted');
+    set(el.kvState, !c ? '—' : (state.logging ? 'LOGGING' : 'stopped'),
+        c && state.logging ? 'green' : 'muted');
+    set(el.kvRecords, state.records ? state.records.toLocaleString() : '—',
+        state.records ? '' : 'muted');
+    set(el.kvFlash, state.total
+      ? `${(state.used / 1024).toFixed(0)} / ${(state.total / 1024).toFixed(0)} kB`
+        + (state.storageFull ? ' FULL' : '') : '—',
+      state.storageFull ? 'red' : (state.total ? '' : 'muted'));
+    set(el.kvInterval, state.intervalNow ? state.intervalNow + ' s' : '—',
+        state.intervalNow ? '' : 'muted');
+    set(el.kvAdaptive, (state.fastSec === null && !c) ? '—'
+        : state.adaptive ? `on — ${state.slowMode ? 'slow' : 'fast'}` : 'off',
+        state.adaptive ? '' : 'muted');
+    set(el.kvQuiet, (state.adaptive && state.quietSec)
+        ? `${state.quietNow} / ${state.quietSec} s` : '—',
+        (state.adaptive && state.quietSec) ? '' : 'muted');
+    set(el.kvOta, state.otaCapable === null ? '—' : (state.otaCapable ? 'yes' : 'NO'),
+        state.otaCapable === null ? 'muted' : (state.otaCapable ? 'green' : 'red'));
+
+    el.tgAdaptive.classList.toggle('on', state.adaptive);
+    el.adaptNotice.classList.toggle('hidden', !state.adaptive);
+    refreshStreamButton();
+  }
+
+  function refreshStreamButton() {
+    el.btnStream.textContent = state.streaming ? 'Stop Live Plot' : 'Start Live Plot';
+    el.btnStream.className = state.streaming ? 'btn stop' : 'btn primary';
+    el.btnStream.disabled = !ble.isConnected();
+  }
+
+  function fillSamplingForm() {
+    if (state.fastSec  !== null) el.inFast.value  = state.fastSec;
+    if (state.slowSec  !== null) el.inSlow.value  = state.slowSec;
+    if (state.sdMg     !== null) el.inSd.value    = state.sdMg;
+    if (state.tempC100 !== null) el.inTemp.value  = (state.tempC100 / 100).toFixed(2);
+    if (state.quietSec !== null) el.inQuiet.value = state.quietSec;
+  }
+
+  function setControls(on) {
+    CONTROL_IDS.forEach((id) => { const b = $(id); if (b) b.disabled = !on; });
+  }
+
+  function onConnected() {
+    el.connect.textContent = 'Disconnect';
+    el.connect.className = 'btn';
+    setControls(true);
+    logLine('Connected to ' + state.device.name, 't-good');
+    refresh();
+    ble.send('STATUS');
+  }
+
+  function onDisconnected() {
+    el.connect.textContent = 'Connect via Bluetooth';
+    el.connect.className = 'btn primary';
+    setControls(false);
+    state.logging = false; state.wifiIp = null; state.streaming = false;
+    dump.abort();
+    el.wifiLink.classList.remove('show');
+    refresh();
+    logLine('Device disconnected.', 't-warn');
+  }
+
+  /* — wiring — */
+  el.connect.addEventListener('click', async () => {
+    if (ble.isConnected()) { ble.disconnect(); return; }
+    try { await ble.connect(); onConnected(); }
+    catch (e) { logLine('Connection failed: ' + (e && e.message ? e.message : e), 't-danger'); }
+  });
+
+  $('btnStart').addEventListener('click', () => ble.send('START:' + Math.floor(Date.now() / 1000)));
+  $('btnStop').addEventListener('click',  () => ble.send('STOP'));
+  $('btnStatus').addEventListener('click', () => ble.send('STATUS'));
+  $('btnLiveOne').addEventListener('click', () => ble.send('LIVE'));
+  $('btnDump').addEventListener('click',   () => ble.send('DUMP'));
+
+  el.btnStream.addEventListener('click', () => {
+    if (state.streaming) ble.send('STREAM:OFF');
+    else { livePlot.clear(); ble.send('STREAM:ON'); }
+  });
+
+  el.tgAdaptive.addEventListener('click', () => {
+    if (el.tgAdaptive.disabled) return;
+    ble.send(state.adaptive ? 'ADAPTIVE:OFF' : 'ADAPTIVE:ON');
+  });
+
+  $('btnSaveSampling').addEventListener('click', () => {
+    const fast  = parseInt(el.inFast.value, 10);
+    const slow  = parseInt(el.inSlow.value, 10);
+    const sd    = parseInt(el.inSd.value, 10);
+    const tempC = parseFloat(el.inTemp.value);
+    const quiet = parseInt(el.inQuiet.value, 10);
+
+    const bad = (m) => { el.samplingHint.textContent = m; el.samplingHint.className = 'note bad'; };
+
+    if (!(fast >= 5 && fast <= 3600))     return bad('Fast interval must be 5–3600 s.');
+    if (!(slow >= fast && slow <= 3600))  return bad('Slow interval must be between the fast interval and 3600 s.');
+    if (!(sd >= 1 && sd <= 4000))         return bad('Activity threshold must be 1–4000 mg.');
+    if (!(tempC > 0 && tempC <= 50))      return bad('Temp tolerance must be greater than 0 and at most 50 °C.');
+    if (!(quiet >= 30 && quiet <= 43200)) return bad('Quiet period must be 30–43200 s.');
+
+    el.samplingHint.textContent = 'Saving…';
+    el.samplingHint.className = 'note';
+    ble.send(`ADAPTCFG:${fast}|${slow}|${sd}|${Math.round(tempC * 100)}|${quiet}`);
+    setTimeout(() => {
+      el.samplingHint.textContent = 'Saved to the logger’s flash and applied on the next sample.';
+      el.samplingHint.className = 'note good';
+    }, 600);
+  });
+
+  $('btnErase').addEventListener('click', () => el.eraseBanner.classList.add('show'));
+  $('btnEraseYes').addEventListener('click', () => {
+    el.eraseBanner.classList.remove('show');
+    ble.send('ERASE:CONFIRM');
+    logLine('Erase confirmed — wiping flash…', 't-warn');
+    state.records = 0; refresh();
+  });
+  $('btnEraseNo').addEventListener('click', () => {
+    el.eraseBanner.classList.remove('show');
+    logLine('Erase cancelled.', 't-muted');
+  });
+
+  return { refresh, refreshStreamButton, fillSamplingForm, setControls,
+           onConnected, onDisconnected };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. Bluetooth CSV dump
+   ═══════════════════════════════════════════════════════════════════════════ */
+const dump = (() => {
+  let active = false, buffer = '', expected = 0;
+
+  function begin(total) {
+    active = true; buffer = ''; expected = total;
+    el.progressWrap.classList.add('active');
+    el.progressFill.style.width = '0%';
+    el.progressCnt.textContent = '0 / ' + total.toLocaleString();
+    logLine(`Download starting — ${total.toLocaleString()} records.`, 't-muted');
+    ble.captureRaw(onChunk);
+  }
+
+  function onChunk(chunk) {
+    buffer += chunk;
+    const eof = buffer.indexOf('EOF');
+    const body = eof === -1 ? buffer : buffer.slice(0, eof);
+    // Data lines only: drop comments, then subtract the header line.
+    const seen = Math.max(0, body.split('\n').filter((l) => l && l[0] !== '#').length - 1);
+
+    if (expected > 0) {
+      el.progressFill.style.width = Math.min(99, (seen / expected) * 100) + '%';
+      el.progressCnt.textContent = seen.toLocaleString() + ' / ' + expected.toLocaleString();
+    } else {
+      el.progressCnt.textContent = seen.toLocaleString() + ' records';
+    }
+    if (eof !== -1) finish(body, seen);
+  }
+
+  function finish(body, seen) {
+    active = false;
+    ble.releaseRaw();
+    el.progressFill.style.width = '100%';
+    el.progressCnt.textContent = seen.toLocaleString() + ' — complete';
+    setTimeout(() => el.progressWrap.classList.remove('active'), 2200);
+
+    const csv = body.split('\n').filter((l) => l && l[0] !== '#').join('\n') + '\n';
+    saveFile(csv, 'FishLogger_' + new Date().toISOString().slice(0, 10) + '.csv', 'text/csv');
+    logLine('Download complete — CSV saved.', 't-good');
+    state.records = seen; ui.refresh();
+  }
+
+  function abort() {
+    if (!active) return;
+    active = false;
+    ble.releaseRaw();
+    el.progressWrap.classList.remove('active');
+    logLine('Download interrupted.', 't-warn');
+  }
+
+  return { begin, abort };
+})();
+
+function saveFile(text, filename, mime) {
+  const blob = new Blob([text], { type: mime || 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8. WiFi
+   ═══════════════════════════════════════════════════════════════════════════ */
+const wifi = (() => {
+  function setStatus(text, cls) {
+    el.wifiStatus.textContent = text;
+    el.wifiStatus.className = cls || 'note';
+  }
+
+  $('btnConnectWifi').addEventListener('click', () => {
+    const ssid = el.wifiSSID.value.trim();
+    const pass = el.wifiPass.value;   // not trimmed — trailing spaces can be real
+    if (!ssid) { alert('Enter a WiFi network name (SSID).'); return; }
+    setStatus('Joining "' + ssid + '"… up to 20 s', 'note');
+    ble.send(`WIFI|${ssid}|${pass}`);
+  });
+  $('btnUseSavedWifi').addEventListener('click', () => {
+    setStatus('Joining the saved network… up to 20 s', 'note');
+    ble.send('WIFI');
+  });
+  $('btnScanWifi').addEventListener('click', () => ble.send('SCAN'));
+  $('btnWifiOff').addEventListener('click',  () => ble.send('WIFIOFF'));
+
+  function onMessage(p) {
+    if (p[1] === 'OK') {
+      state.wifiIp = p[2];
+      el.wifiLink.href = 'http://' + p[2] + '/data.csv';
+      el.wifiLink.textContent = 'Download CSV over WiFi — ' + p[2];
+      el.wifiLink.classList.add('show');
+      setStatus('Connected as ' + p[2] + '. Your phone or computer must be on the ' +
+                'same network. Much faster than a Bluetooth dump.', 'note good');
+      logLine('[WiFi] connected: ' + p[2], 't-good');
+      ota.setHost(p[2]);
+    } else if (p[1] === 'FAIL') {
+      state.wifiIp = null;
+      el.wifiLink.classList.remove('show');
+      setStatus('Failed: ' + (p[3] || 'unknown') + '. Try Scan first — if the network ' +
+                'is not listed, the logger cannot hear it at all.', 'note bad');
+      logLine('[WiFi] failed: ' + p.slice(2).join(' '), 't-danger');
+    } else if (p[1] === 'OFF') {
+      state.wifiIp = null;
+      el.wifiLink.classList.remove('show');
+      setStatus('WiFi off.', 'note');
+    }
+  }
+
+  return { onMessage, setStatus };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. OTA firmware update
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ota = (() => {
+  const httpsPage = location.protocol === 'https:';
+  if (httpsPage) el.otaHttps.classList.remove('hidden');
+
+  function setStatus(text, cls) {
+    el.otaStatus.textContent = text;
+    el.otaStatus.className = cls || 'note';
+  }
+
+  function setHost(ip) {
+    el.otaHost.value = ip;
+    const url = 'http://' + ip + '/update';
+    el.otaLink1.href = url;
+    el.otaLink2.href = url;
+    el.otaLink2.classList.add('show');
+    setStatus('Ready. Pick a .bin and press Upload.', 'note good');
+  }
+
+  function onMessage(p) {
+    if (p[1] === 'ERR') {
+      setStatus('Logger refused OTA: ' + p.slice(2).join(' '), 'note bad');
+      logLine('[OTA] ' + p.slice(2).join(' '), 't-danger');
+      return;
+    }
+    const url = p.slice(1).join('|');
+    const m = url.match(/https?:\/\/([^/]+)/);
+    if (m) setHost(m[1]);
+    logLine('[OTA] update endpoint: ' + url, 't-good');
+  }
+
+  // Brings WiFi up using the credentials already saved on the logger and returns
+  // the update URL, so this usually needs no typing at all.
+  $('btnOtaPrepare').addEventListener('click', () => {
+    if (state.wifiIp) { setHost(state.wifiIp); return; }
+    setStatus('Asking the logger to bring WiFi up…', 'note');
+    ble.send('OTA');
+  });
+
+  $('btnOtaUpload').addEventListener('click', () => {
+    const file = el.otaFile.files && el.otaFile.files[0];
+    const host = el.otaHost.value.trim();
+    if (!host) { alert('No logger address. Press "Bring WiFi up" first, or type the address.'); return; }
+    if (!file) { alert('Choose a compiled .bin firmware file first.'); return; }
+    if (!/\.bin$/i.test(file.name) &&
+        !confirm(`"${file.name}" does not end in .bin. Upload anyway?`)) return;
+    if (httpsPage) {
+      setStatus('Blocked: this page is https and the logger is plain http. Use the ' +
+                'logger’s own update page linked above.', 'note bad');
+      return;
+    }
+    upload(file, host);
+  });
+
+  function upload(file, host) {
+    const url = 'http://' + host + '/update';
+    const form = new FormData();
+    form.append('firmware', file, file.name);
+
+    el.otaWrap.classList.add('active');
+    el.otaFill.style.width = '0%';
+    el.otaPct.textContent = '0%';
+    el.otaLabel.textContent = `Uploading ${(file.size / 1024).toFixed(0)} kB`;
+    setStatus('Uploading — do not close this page or power the logger off.', 'note warn');
+    logLine(`[OTA] uploading ${file.name} (${file.size} bytes) to ${url}`, 't-muted');
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.timeout = 180000;
+
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = (e.loaded / e.total) * 100;
+      el.otaFill.style.width = pct.toFixed(1) + '%';
+      el.otaPct.textContent = pct.toFixed(0) + '%';
+    };
+
+    xhr.onload = () => {
+      let ok = xhr.status >= 200 && xhr.status < 300;
+      let msg = xhr.responseText || '';
+      try { const j = JSON.parse(msg); ok = ok && j.ok !== false; msg = j.msg || msg; } catch (_) {}
+      if (ok) {
+        el.otaFill.style.width = '100%';
+        el.otaPct.textContent = '100%';
+        el.otaLabel.textContent = 'Complete';
+        setStatus('Image accepted and verified. The logger is rebooting into the new ' +
+                  'firmware — reconnect Bluetooth in a few seconds.', 'note good');
+        logLine('[OTA] success — logger rebooting.', 't-good');
+      } else {
+        setStatus(`Update rejected (HTTP ${xhr.status}): ${msg}. The existing firmware ` +
+                  'is still running.', 'note bad');
+        logLine('[OTA] failed: HTTP ' + xhr.status + ' ' + msg, 't-danger');
+      }
+    };
+    xhr.onerror = () => {
+      setStatus('Could not reach ' + url + '. Check that you are on the same network as ' +
+                'the logger and that the address is right.', 'note bad');
+      logLine('[OTA] network error reaching ' + url, 't-danger');
+    };
+    xhr.ontimeout = () => {
+      setStatus('Upload timed out. The logger may have gone back to sleep — reconnect ' +
+                'and try again.', 'note bad');
+      logLine('[OTA] timed out.', 't-danger');
+    };
+    xhr.send(form);
+  }
+
+  return { onMessage, setHost, setStatus };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10. CSV upload and plotting
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const fileInput = $('csvFileInput'), fileNameEl = $('csvFileName');
+  const summaryEl = $('csvSummary'), chartsWrap = $('csvCharts');
+
+  let charts = {};
+  let lastParsed = null;
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    fileNameEl.textContent = 'Loading ' + file.name + '…';
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      fileNameEl.textContent = file.name;
+      try {
+        const parsed = parseLogCSV(evt.target.result);
+        if (!parsed.rows.length) {
+          summaryEl.style.display = 'block';
+          summaryEl.textContent = 'No recognizable temperature or acceleration columns in this file.';
+          chartsWrap.style.display = 'none';
+          return;
+        }
+        renderCharts(parsed);
+      } catch (err) {
+        summaryEl.style.display = 'block';
+        summaryEl.textContent = 'Error parsing file: ' + err.message;
+        chartsWrap.style.display = 'none';
+      }
+    };
+    reader.onerror = () => { fileNameEl.textContent = 'Failed to read ' + file.name; };
+    reader.readAsText(file);
+  });
+
+  // Tab or comma delimited. Prefers the real unix_time column for the x-axis;
+  // 1.x always assumed a 15 s cadence, which silently misplaced every sample
+  // whenever the interval differed — and with adaptive sampling it always does.
+  function parseLogCSV(text) {
+    const lines = text.split(/\r\n|\n/).filter((l) => l.trim().length && l[0] !== '#');
+    if (!lines.length) return { rows: [], timeSource: 'index' };
+
+    const delim = (lines[0].match(/\t/g) || []).length >= (lines[0].match(/,/g) || []).length ? '\t' : ',';
+    const header = lines[0].split(delim).map((h) => h.trim().toLowerCase());
+    const findCol = (...keys) => {
+      for (const k of keys) { const i = header.findIndex((h) => h.includes(k)); if (i !== -1) return i; }
+      return -1;
+    };
+
+    const cols = {
+      unix:    findCol('unix_time', 'unix', 'epoch'),
+      elapsed: findCol('elapsed', 'time_s', 'seconds'),
+      int:     findCol('temp_internal', 'internal_c', 'internal temp', 'core'),
+      amb:     findCol('temp_ambient', 'ambient_c', 'ambient temp', 'amb'),
+      mean:    findCol('accel_mean', 'mean_mg', 'mean accel'),
+      sd:      findCol('accel_sd', 'sd_mg', 'accel_var'),
+      peak:    findCol('accel_peak', 'peak_mg', 'peak accel'),
+      slow:    findCol('slow_mode', 'slowmode')
+    };
+
+    const num = (cells, i) => (i !== -1 ? parseFloat(cells[i]) : NaN);
+    const raw = [];
+    lines.slice(1).forEach((line, i) => {
+      const c = line.split(delim);
+      const r = {
+        ti: num(c, cols.int), ta: num(c, cols.amb), am: num(c, cols.mean),
+        sd: num(c, cols.sd), ap: num(c, cols.peak),
+        slow: cols.slow !== -1 ? (parseInt(c[cols.slow], 10) === 1) : false,
+        unix: num(c, cols.unix), elapsed: num(c, cols.elapsed), idx: i
+      };
+      if ([r.ti, r.ta, r.am, r.sd, r.ap].every(isNaN)) return;
+      raw.push(r);
+    });
+
+    let timeSource = 'index';
+    const unixOk = cols.unix !== -1 && raw.length && raw.every((r) => r.unix > 1600000000);
+    if (unixOk) timeSource = 'unix';
+    else if (cols.elapsed !== -1 && raw.some((r) => !isNaN(r.elapsed))) timeSource = 'elapsed';
+
+    const t0 = unixOk ? raw[0].unix : 0;
+    const rows = raw.map((r) => {
+      let t;
+      if (timeSource === 'unix') t = (r.unix - t0) / 60;
+      else if (timeSource === 'elapsed') t = r.elapsed / 60;
+      else t = r.idx * 0.25;
+      return { t, ti: r.ti, ta: r.ta, am: r.am, sd: r.sd, ap: r.ap, slow: r.slow };
+    });
+
+    return { rows, cols, timeSource };
+  }
+
+  const round2 = (v) => Math.round(v * 100) / 100;
+
+  function renderCharts(parsed) {
+    const rows = parsed.rows;
+    const labels = rows.map((r) => round2(r.t));
+    const ti = rows.map((r) => r.ti), ta = rows.map((r) => r.ta);
+    const am = rows.map((r) => r.am), sd = rows.map((r) => r.sd), ap = rows.map((r) => r.ap);
+    const dt = rows.map((r) => (isNaN(r.ti) || isNaN(r.ta) ? NaN : r.ti - r.ta));
+
+    const haveTemp  = parsed.cols.int !== -1 || parsed.cols.amb !== -1;
+    const haveAccel = parsed.cols.mean !== -1 || parsed.cols.peak !== -1;
+    const haveSd    = parsed.cols.sd !== -1;
+    const haveBoth  = parsed.cols.int !== -1 && parsed.cols.amb !== -1;
+    const slowCount = rows.filter((r) => r.slow).length;
+
+    lastParsed = { labels, ti, ta, am, sd, ap, dt, haveTemp, haveAccel, haveSd, haveBoth };
+
+    const nums = (a) => a.filter((v) => !isNaN(v));
+    const rangeOf = (a) => (nums(a).length ? [Math.min(...nums(a)), Math.max(...nums(a))] : null);
+    const ambR = rangeOf(ta), peakR = rangeOf(ap), dtR = rangeOf(dt);
+
+    const timeNote = {
+      unix: 'x-axis from unix_time',
+      elapsed: 'x-axis from the elapsed-time column',
+      index: 'no time column found — x-axis assumes a 15 s cadence'
+    }[parsed.timeSource];
+
+    let summary = rows.length.toLocaleString() + ' records · ' + timeNote;
+    if (labels.length) summary += ' · span ' + round2(labels[labels.length - 1]) + ' min';
+    if (ambR)  summary += ' · ambient ' + ambR[0].toFixed(1) + ' to ' + ambR[1].toFixed(1) + '°C';
+    if (dtR)   summary += ' · Δ ' + dtR[0].toFixed(1) + ' to ' + dtR[1].toFixed(1) + '°C';
+    if (peakR) summary += ' · peak accel max ' + peakR[1].toFixed(0) + ' mg';
+    if (parsed.cols.slow !== -1) {
+      const pct = rows.length ? (100 * slowCount / rows.length).toFixed(0) : 0;
+      summary += ` · ${pct}% of samples on the slow adaptive rate`;
+    }
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = summary;
+    chartsWrap.style.display = 'block';
+
+    const xScale = {
+      title: { display: true, text: 'Minutes elapsed', color: C.tick, font: { size: 12 } },
+      ticks: { color: C.tick, maxTicksLimit: 8, font: { size: 11 } }, grid: { display: false }
+    };
+    const line = (label, data, color, extra) => Object.assign({
+      label, data, borderColor: color, backgroundColor: 'transparent',
+      borderWidth: 2.4, pointRadius: 0, tension: 0.15, spanGaps: true
+    }, extra || {});
+    const baseOpts = (yTitle) => ({
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: { x: xScale,
+        y: { title: { display: true, text: yTitle, color: C.tick, font: { size: 12 } },
+             ticks: { color: C.tick, font: { size: 11 } }, grid: { color: C.grid } } }
+    });
+
+    Object.values(charts).forEach((c) => c && c.destroy());
+    charts = {};
+
+    if (haveTemp) {
+      charts.temp = new Chart($('chartTemp'), {
+        type: 'line',
+        data: { labels, datasets: [
+          line('Internal temp (°C)', ti, C.core),
+          line('Ambient temp (°C)', ta, C.amb, { borderDash: [6, 4] })
+        ]},
+        options: baseOpts('Temperature (°C)')
+      });
+    }
+
+    if (haveBoth) {
+      charts.excess = new Chart($('chartExcess'), {
+        type: 'line',
+        data: { labels, datasets: [
+          line('Δ temperature (°C)', dt, C.excess,
+               { backgroundColor: 'rgba(106,43,156,0.10)', fill: true })
+        ]},
+        options: baseOpts('Internal − ambient (°C)')
+      });
+    }
+
+    if (haveAccel) {
+      const ds = [
+        line('Peak accel (mg)', ap, C.peak,
+             { backgroundColor: 'rgba(181,104,0,0.10)', borderWidth: 1.8, fill: true, tension: 0.1 }),
+        line('Mean accel (mg)', am, C.act, { tension: 0.1 })
+      ];
+      if (haveSd) ds.push(line('SD accel (mg)', sd, C.sd,
+                               { borderWidth: 1.8, borderDash: [5, 4], tension: 0.1 }));
+      charts.accel = new Chart($('chartAccel'), {
+        type: 'line', data: { labels, datasets: ds }, options: baseOpts('Acceleration (mg)')
+      });
+    }
+
+    charts.combined = new Chart($('chartCombined'), {
+      type: 'line',
+      data: { labels, datasets: [
+        line('Internal temp (°C)', ti, C.core, { yAxisID: 'yTemp' }),
+        line('Ambient temp (°C)', ta, C.amb, { yAxisID: 'yTemp', borderDash: [6, 4] }),
+        line('Mean accel (mg)', am, C.act, { yAxisID: 'yAccel', borderWidth: 1.8, tension: 0.1 }),
+        line('Peak accel (mg)', ap, C.peak, { yAxisID: 'yAccel', borderWidth: 1.4, borderDash: [3, 3], tension: 0.1 })
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false } },
+        scales: { x: xScale,
+          yTemp:  { position: 'left', title: { display: true, text: 'Temperature (°C)', color: C.tick, font: { size: 12 } },
+                    ticks: { color: C.tick, font: { size: 11 } }, grid: { color: C.grid } },
+          yAccel: { position: 'right', title: { display: true, text: 'Acceleration (mg)', color: C.tick, font: { size: 12 } },
+                    ticks: { color: C.tick, font: { size: 11 } }, grid: { display: false } } }
+      }
+    });
+  }
+
+  /* — PNG export. Same palette as on screen; only the framing changes: white
+       ground, a title, and a visible legend for documents. — */
+  const whiteBgPlugin = {
+    id: 'whiteBgPlugin',
+    beforeDraw(chart) {
+      const ctx = chart.canvas.getContext('2d');
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, chart.width, chart.height);
+      ctx.restore();
+    }
+  };
+  const EXPORT_W = 1000, EXPORT_H = 520;
+  const eGrid = 'rgba(0,0,0,0.09)';
+  const xExport = {
+    title: { display: true, text: 'Minutes elapsed', color: C.ink, font: { size: 13 } },
+    ticks: { color: C.ink, maxTicksLimit: 10 }, grid: { display: false }
+  };
+  const yExport = (text) => ({
+    title: { display: true, text, color: C.ink, font: { size: 13 } },
+    ticks: { color: C.ink }, grid: { color: eGrid }
+  });
+  const exportOpts = (title, scales) => ({
+    responsive: false, animation: false, devicePixelRatio: 1,
+    layout: { padding: { left: 8, right: 28, top: 8, bottom: 4 } },
+    plugins: {
+      title: { display: true, text: title, color: C.ink, font: { size: 19, weight: 'bold' }, padding: { bottom: 16 } },
+      legend: { display: true, position: 'bottom', labels: { color: C.ink, font: { size: 12 } } }
+    },
+    scales
+  });
+
+  function buildExportChart(kind) {
+    if (!lastParsed) return null;
+    const { labels, ti, ta, am, sd, ap, dt, haveSd } = lastParsed;
+    const canvas = document.createElement('canvas');
+    canvas.width = EXPORT_W; canvas.height = EXPORT_H;
+    const line = (label, data, color, extra) => Object.assign({
+      label, data, borderColor: color, backgroundColor: 'transparent',
+      borderWidth: 2, pointRadius: 0, tension: 0.15, spanGaps: true
+    }, extra || {});
+
+    let cfg;
+    if (kind === 'temp') {
+      cfg = { type: 'line', data: { labels, datasets: [
+          line('Internal temp (°C)', ti, C.core),
+          line('Ambient temp (°C)', ta, C.amb, { borderDash: [6, 3] })
+        ]},
+        options: exportOpts('Internal & Ambient Temperature', { x: xExport, y: yExport('Temperature (°C)') }),
+        plugins: [whiteBgPlugin] };
+    } else if (kind === 'excess') {
+      cfg = { type: 'line', data: { labels, datasets: [
+          line('Δ temperature (°C)', dt, C.excess, { backgroundColor: 'rgba(106,43,156,0.12)', fill: true })
+        ]},
+        options: exportOpts('Thermal Excess (internal − ambient)', { x: xExport, y: yExport('Δ °C') }),
+        plugins: [whiteBgPlugin] };
+    } else if (kind === 'accel') {
+      const ds = [
+        line('Peak accel (mg)', ap, C.peak,
+             { backgroundColor: 'rgba(181,104,0,0.10)', borderWidth: 1.5, fill: true, tension: 0.1 }),
+        line('Mean accel (mg)', am, C.act, { tension: 0.1 })
+      ];
+      if (haveSd) ds.push(line('SD accel (mg)', sd, C.sd, { borderWidth: 1.5, borderDash: [4, 3], tension: 0.1 }));
+      cfg = { type: 'line', data: { labels, datasets: ds },
+        options: exportOpts('Acceleration (Mean, Peak, SD)', { x: xExport, y: yExport('Acceleration (mg)') }),
+        plugins: [whiteBgPlugin] };
+    } else if (kind === 'combined') {
+      cfg = { type: 'line', data: { labels, datasets: [
+          line('Internal temp (°C)', ti, C.core, { yAxisID: 'yTemp' }),
+          line('Ambient temp (°C)', ta, C.amb, { yAxisID: 'yTemp', borderDash: [6, 3] }),
+          line('Mean accel (mg)', am, C.act, { yAxisID: 'yAccel', borderWidth: 1.5, tension: 0.1 }),
+          line('Peak accel (mg)', ap, C.peak, { yAxisID: 'yAccel', borderWidth: 1, borderDash: [2, 2], tension: 0.1 })
+        ]},
+        options: exportOpts('Temperature & Acceleration Overview', {
+          x: xExport,
+          yTemp: Object.assign({ position: 'left' }, yExport('Temperature (°C)')),
+          yAccel: Object.assign({ position: 'right', grid: { display: false } }, yExport('Acceleration (mg)'))
+        }),
+        plugins: [whiteBgPlugin] };
+    } else return null;
+
+    return { canvas, chartInstance: new Chart(canvas, cfg), title: cfg.options.plugins.title.text };
+  }
+
+  function triggerDownload(dataUrl, filename) {
+    const a = document.createElement('a');
+    a.download = filename; a.href = dataUrl; a.click();
+  }
+
+  document.querySelectorAll('.btn-png').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.chart;
+      if (!lastParsed) { alert('Upload a CSV first to generate plots.'); return; }
+      if (kind === 'temp'   && !lastParsed.haveTemp)  { alert('This file has no temperature data.'); return; }
+      if (kind === 'accel'  && !lastParsed.haveAccel) { alert('This file has no acceleration data.'); return; }
+      if (kind === 'excess' && !lastParsed.haveBoth)  { alert('Thermal excess needs both internal and ambient columns.'); return; }
+      const built = buildExportChart(kind);
+      if (!built) return;
+      triggerDownload(built.canvas.toDataURL('image/png'), 'fish_logger_' + kind + '.png');
+      built.chartInstance.destroy();
+    });
+  });
+
+  $('btnDownloadAllCharts').addEventListener('click', () => {
+    if (!lastParsed) { alert('Upload a CSV first to generate plots.'); return; }
+    const kinds = [];
+    if (lastParsed.haveTemp)  kinds.push('temp');
+    if (lastParsed.haveBoth)  kinds.push('excess');
+    if (lastParsed.haveAccel) kinds.push('accel');
+    kinds.push('combined');
+
+    const built = kinds.map(buildExportChart).filter(Boolean);
+    if (!built.length) return;
+
+    const gap = 36;
+    const chartW = Math.max(...built.map((b) => b.canvas.width));
+    const width = chartW + gap * 2;
+    const height = built.reduce((s, b) => s + b.canvas.height, 0) + gap * (built.length + 1);
+
+    const master = document.createElement('canvas');
+    master.width = width; master.height = height;
+    const ctx = master.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    let y = gap;
+    built.forEach((b) => {
+      ctx.drawImage(b.canvas, gap, y);
+      y += b.canvas.height + gap;
+      b.chartInstance.destroy();
+    });
+    triggerDownload(master.toDataURL('image/png'), 'fish_logger_all_charts.png');
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   11. Boot
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function boot() {
+  // Reuse the header mark as the favicon rather than embedding the base64 twice.
+  const fav = document.createElement('link');
+  fav.rel = 'icon';
+  fav.href = document.querySelector('.mark .logo').src;
+  document.head.appendChild(fav);
+
+  if (!navigator.bluetooth) {
+    logLine('This browser does not support Web Bluetooth. Use Chrome or Edge on ' +
+            'desktop or Android (iOS needs the Bluefy app).', 't-danger');
+    el.connect.disabled = true;
+  }
+  ui.setControls(false);
+  ui.refresh();
+  livePlot.build();
+})();
+</script>
+</body>
+</html>

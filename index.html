@@ -423,6 +423,81 @@
   #csvSummary { display: none; font-size: 13.5px; color: var(--faint); line-height: 1.65;
                 margin-top: 13px; padding-top: 13px; border-top: var(--bw) solid var(--line); }
   #csvCharts { display: none; margin-top: 22px; }
+
+  /* — WiFi scan results — */
+  .scanwrap { display: none; margin-top: 15px; border: 1px solid var(--line);
+              border-radius: 10px; overflow: hidden; }
+  .scanwrap.show { display: block; }
+  .scanhead { font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
+              color: var(--faint); padding: 9px 12px; background: var(--sunk);
+              border-bottom: 1px solid var(--line); }
+  .scanlist { max-height: 260px; overflow-y: auto; }
+  .scanrow { display: flex; align-items: center; gap: 10px; width: 100%;
+             padding: 11px 12px; background: none; border: 0; cursor: pointer;
+             border-bottom: 1px solid var(--line); text-align: left;
+             font: inherit; color: inherit; }
+  .scanrow:last-child { border-bottom: 0; }
+  .scanrow:hover, .scanrow:focus-visible { background: var(--sunk); }
+  .scanrow .ssid { flex: 1; font-weight: 600; overflow: hidden;
+                   text-overflow: ellipsis; white-space: nowrap; }
+  .scanrow .lock { font-size: 12px; color: var(--faint); }
+  .scanrow .rssi { font-family: var(--mono); font-size: 12px; color: var(--faint);
+                   min-width: 62px; text-align: right; }
+  .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 13px; }
+  .bars i { width: 3px; background: var(--line); border-radius: 1px; display: block; }
+  .bars i.on { background: var(--green, #147f3b); }
+  .bars i:nth-child(1) { height: 4px; }
+  .bars i:nth-child(2) { height: 7px; }
+  .bars i:nth-child(3) { height: 10px; }
+  .bars i:nth-child(4) { height: 13px; }
+
+  /* — Endurance estimator — */
+  .estwrap { margin-top: 18px; border: 1px solid var(--line); border-radius: 10px;
+             overflow: hidden; }
+  .esthead { display: flex; align-items: center; justify-content: space-between;
+             gap: 10px; flex-wrap: wrap; padding: 9px 12px; background: var(--sunk);
+             border-bottom: 1px solid var(--line); font-size: 12px;
+             letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+  .gatechk { display: inline-flex; align-items: center; gap: 6px;
+             text-transform: none; letter-spacing: 0; cursor: pointer; }
+  .estgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+             gap: 1px; background: var(--line); }
+  .estcell { background: var(--card, #fff); padding: 12px; }
+  .estcell .lab { font-size: 11.5px; color: var(--faint); margin-bottom: 4px; }
+  .estcell .val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .estcell .unit { font-size: 12px; color: var(--faint); font-weight: 500; }
+  .estcell.bind .val { color: var(--red, #b00); }
+  .estlimit { padding: 11px 12px; font-size: 13px; line-height: 1.55;
+              border-top: 1px solid var(--line); }
+  .assump { margin-top: 14px; font-size: 13px; }
+  .assump summary { cursor: pointer; color: var(--faint); padding: 4px 0; }
+  .assump > div { padding: 6px 0 2px; color: var(--faint); line-height: 1.6; }
+  .assump p { margin: 0 0 9px; }
+
+  /* — CSV window / crop controls — */
+  #csvWindow { display: none; margin-top: 18px; border: 1px solid var(--line);
+               border-radius: 10px; overflow: hidden; }
+  #csvWindow.show { display: block; }
+  .winhead { display: flex; align-items: center; justify-content: space-between;
+             gap: 10px; padding: 9px 12px; background: var(--sunk);
+             border-bottom: 1px solid var(--line); font-size: 12px;
+             letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+  .winrange { font-family: var(--mono); text-transform: none; letter-spacing: 0; }
+  .winbtns { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
+  .winbtns button { font: inherit; font-size: 13px; padding: 7px 12px; cursor: pointer;
+                    border: 1px solid var(--line); background: none; border-radius: 999px;
+                    color: inherit; }
+  .winbtns button:hover { background: var(--sunk); }
+  .winbtns button.on { background: var(--ink, #14161a); color: #fff;
+                       border-color: var(--ink, #14161a); }
+  .winsliders { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px;
+                align-items: center; padding: 4px 12px 12px; }
+  .winsliders label { font-size: 12px; color: var(--faint); }
+  .winsliders input[type=range] { width: 100%; }
+  .winstats { padding: 0 12px 12px; font-size: 13px; color: var(--faint);
+              line-height: 1.65; }
+  .winactions { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px;
+                border-top: 1px solid var(--line); }
   #btnDownloadAllCharts { margin-top: 22px; }
 
   /* ══ Console log ═════════════════════════════════════════════════════ */
@@ -558,6 +633,29 @@
       <div id="csvFileName"></div>
       <div id="csvSummary"></div>
 
+      <div id="csvWindow">
+        <div class="winhead">
+          <span>Window</span>
+          <span id="winRange" class="winrange">—</span>
+        </div>
+
+        <div class="winbtns" id="winQuick"></div>
+
+        <div class="winsliders">
+          <label for="winStart">Start</label>
+          <input type="range" id="winStart" min="0" max="1000" value="0" step="1">
+          <label for="winEnd">End</label>
+          <input type="range" id="winEnd" min="0" max="1000" value="1000" step="1">
+        </div>
+
+        <div class="winstats" id="winStats"></div>
+
+        <div class="winactions">
+          <button id="btnWinFull" class="btn">Reset to full</button>
+          <button id="btnWinCsv" class="btn">Download this window as CSV</button>
+        </div>
+      </div>
+
       <div id="csvCharts">
         <div class="plot">
           <div class="plot-head">
@@ -625,67 +723,112 @@
         <div class="kvrow"><span class="k">Records stored</span><span class="v muted" id="kvRecords">—</span></div>
         <div class="kvrow"><span class="k">Flash used</span><span class="v muted" id="kvFlash">—</span></div>
         <div class="kvrow"><span class="k">Interval in effect</span><span class="v muted" id="kvInterval">—</span></div>
-        <div class="kvrow"><span class="k">Adaptive</span><span class="v muted" id="kvAdaptive">—</span></div>
-        <div class="kvrow"><span class="k">Quiet timer</span><span class="v muted" id="kvQuiet">—</span></div>
+        <div class="kvrow"><span class="k">Storage remaining</span><span class="v muted" id="kvHeadroom">—</span></div>
         <div class="kvrow"><span class="k">OTA capable</span><span class="v muted" id="kvOta">—</span></div>
       </div>
       <button id="btnStatus" class="btn" style="margin-top:16px;" disabled>Refresh Status</button>
     </div>
 
     <div class="card">
-      <div class="card-label">Sampling</div>
-
-      <div class="switch">
-        <div class="sw-text">
-          <strong>Adaptive sampling</strong>
-          <div>Sample fast while something is happening, slowly when nothing is.
-               Requires both a still accelerometer and stable temperatures before
-               slowing down, and returns to the fast rate on the first sample that
-               is not quiet.</div>
-        </div>
-        <button class="toggle" id="tgAdaptive" disabled aria-label="Toggle adaptive sampling"></button>
-      </div>
-
-      <div class="notice" id="adaptCalNotice">
-        <strong>Calibrate the activity threshold before trusting this.</strong>
-        The default 40 mg is a guess, not a measurement. Log your animal at rest
-        and during normal activity with adaptive off, plot <code>accel_sd_mg</code>,
-        then set the threshold above the resting band and well below the active
-        band. The <code>slow_mode</code> column records which rate produced every
-        sample, so the decision stays auditable after the fact.
-      </div>
+      <div class="card-label">Sampling interval</div>
+      <p class="note" style="margin-bottom:15px;">
+        One sample every N seconds, fixed. The estimates below update as you type.
+        They are planning figures from a simple power model, not guarantees — see
+        the assumptions at the bottom of this card.
+      </p>
 
       <div class="row2" style="gap:14px;">
         <div class="field">
-          <label for="inFast">Fast interval, seconds</label>
-          <input type="number" id="inFast" min="5" max="3600" step="1" inputmode="numeric">
-          <span class="sub">When active</span>
+          <label for="inInterval">Interval, seconds</label>
+          <input type="number" id="inInterval" min="5" max="3600" step="1"
+                 inputmode="numeric" value="15">
+          <span class="sub">5 to 3600</span>
         </div>
         <div class="field">
-          <label for="inSlow">Slow interval, seconds</label>
-          <input type="number" id="inSlow" min="5" max="3600" step="1" inputmode="numeric">
-          <span class="sub">When quiet</span>
-        </div>
-        <div class="field">
-          <label for="inSd">Activity threshold, mg</label>
-          <input type="number" id="inSd" min="1" max="4000" step="1" inputmode="numeric">
-          <span class="sub">accel_sd_mg below this counts as still</span>
-        </div>
-        <div class="field">
-          <label for="inTemp">Temp tolerance, °C</label>
-          <input type="number" id="inTemp" min="0.01" max="50" step="0.01" inputmode="decimal">
-          <span class="sub">Drift from reference counts as changed</span>
-        </div>
-        <div class="field span2">
-          <label for="inQuiet">Quiet period before slowing, seconds</label>
-          <input type="number" id="inQuiet" min="30" max="43200" step="1" inputmode="numeric">
-          <span class="sub">How long everything must stay quiet before relaxing to the slow rate</span>
+          <label for="inPreset">Presets</label>
+          <select id="inPreset">
+            <option value="">Choose…</option>
+            <option value="5">5 s — very fine</option>
+            <option value="15">15 s- default </option>
+            <option value="30">30 s</option>
+            <option value="60">60 s — one minute</option>
+            <option value="300">300 s — five minutes</option>
+            <option value="900">900 s — fifteen minutes</option>
+          </select>
+          <span class="sub">Fills the field</span>
         </div>
       </div>
 
-      <button id="btnSaveSampling" class="btn" style="margin-top:16px;" disabled>Save sampling settings</button>
-      <p class="note" style="margin-top:12px;" id="samplingHint">
+      <div class="estwrap">
+        <div class="esthead">
+          <span>Estimated endurance</span>
+          <label class="gatechk">
+            <input type="checkbox" id="chkGate"> thermocouple power-gated
+          </label>
+        </div>
+        <div class="estgrid" id="estGrid"></div>
+        <div class="estlimit" id="estLimit"></div>
+      </div>
+
+      <button id="btnSaveInterval" class="btn" style="margin-top:16px;" disabled>
+        Save interval to logger
+      </button>
+      <p class="note" style="margin-top:12px;" id="intervalHint">
         Saved to the logger’s flash and applied on the next sample.
+      </p>
+
+      <details class="assump">
+        <summary>How these numbers are worked out</summary>
+        <div>
+          <p><strong>Cell.</strong> ER14505M, 1800 mAh nominal at +20&nbsp;°C. Capacity
+          is derated to 92% at 0&nbsp;°C and 65% at −40&nbsp;°C. The M is the
+          spiral-wound cell — a bobbin ER14505 would not survive the WiFi pulses
+          at all, let alone the cold.</p>
+
+          <p><strong>Per sample.</strong> ~1.1&nbsp;s awake at ~45&nbsp;mA. Most of
+          that is the DS18B20: a 12-bit conversion takes 750&nbsp;ms and the part
+          has to stay powered throughout.</p>
+
+          <p><strong>Idle.</strong> The MAX31855 draws ~900&nbsp;µA continuously
+          whenever it is powered. Unless a GPIO power-gate is fitted, that single
+          number dominates the entire idle budget — tick the box above to see the
+          difference it makes. With the gate fitted, idle falls to roughly
+          15&nbsp;µA for the whole board.</p>
+
+          <p><strong>Assumes deep sleep between samples, which is not implemented
+          yet.</strong> The firmware currently stays awake with Bluetooth
+          advertising, which is closer to 1.5 days regardless of interval. These
+          figures describe the deployment build.</p>
+
+          <p><strong>Storage</strong> is exact, not modelled: it comes from the
+          logger's real filesystem size and its 23-byte record format.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Battery</div>
+      <p class="note" style="margin-bottom:15px;">
+        The logger records when a cell was fitted and how long it has actually
+        spent logging since, so endurance can be judged from real hours rather
+        than from a guess.
+      </p>
+      <div>
+        <div class="kvrow"><span class="k">Fitted</span><span class="v muted" id="kvBattWhen">—</span></div>
+        <div class="kvrow"><span class="k">Elapsed since fitted</span><span class="v muted" id="kvBattAge">—</span></div>
+        <div class="kvrow"><span class="k">Time spent logging</span><span class="v muted" id="kvBattLog">—</span></div>
+        <div class="kvrow"><span class="k">Samples on this cell</span><span class="v muted" id="kvBattSamples">—</span></div>
+        <div class="kvrow"><span class="k">Estimated cell used</span><span class="v muted" id="kvBattPct">—</span></div>
+      </div>
+      <div class="prog" id="battWrap" style="display:block;margin-top:14px;">
+        <div class="bar"><span class="fill" id="battFill" style="width:0%"></span></div>
+      </div>
+      <button id="btnBattNew" class="btn" style="margin-top:16px;" disabled>
+        I fitted a fresh battery
+      </button>
+      <p class="note" style="margin-top:12px;" id="battHint">
+        Resets the counters above. Only press this when the cell has actually
+        been changed.
       </p>
     </div>
 
@@ -727,6 +870,10 @@
         <button id="btnUseSavedWifi" class="btn" disabled>Saved network</button>
         <button id="btnScanWifi"     class="btn" disabled>Scan networks</button>
         <button id="btnWifiOff"      class="btn" disabled>WiFi off</button>
+      </div>
+      <div id="wifiScanWrap" class="scanwrap">
+        <div class="scanhead" id="wifiScanHead">Scanning…</div>
+        <div id="wifiScanList" class="scanlist"></div>
       </div>
       <div id="wifiStatus" class="note" style="margin-top:15px;">Not connected to WiFi.</div>
       <a id="wifiLink" class="linkout" href="#" target="_blank" rel="noopener">Download CSV over WiFi</a>
@@ -825,9 +972,31 @@ const $ = (id) => document.getElementById(id);
 
 const CONTROL_IDS = [
   'btnStart','btnStop','btnStream','btnLiveOne','btnStatus','btnDump',
-  'btnErase','tgAdaptive','btnSaveSampling','btnConnectWifi','btnUseSavedWifi',
+  'btnErase','btnSaveInterval','btnBattNew','btnConnectWifi','btnUseSavedWifi',
   'btnScanWifi','btnWifiOff','btnOtaPrepare'
 ];
+
+// Live streaming is the most expensive thing the logger can do — it holds
+// the radio and both sensors busy continuously. The firmware stops itself
+// after 60 s; this is the matching client-side cutoff so the UI agrees even
+// if the page is talking to an older build.
+const STREAM_LIMIT_MS = 60000;
+
+// Power model behind the endurance estimates. Every number here is an
+// assumption, not a measurement — they are surfaced in the "How these
+// numbers are worked out" panel so they can be argued with.
+const POWER = {
+  cellMah:       1800,   // ER14505M nominal at +20 C
+  activeMa:      45,     // CPU + sensors awake, radio off
+  activeSec:     1.1,    // dominated by the DS18B20's 750 ms conversion
+  idleUngatedUa: 920,    // MAX31855 quiescent draw dominates this
+  idleGatedUa:   15,     // whole board, thermocouple gated off
+  derate: [
+    { c:  20, f: 1.00 },
+    { c:   0, f: 0.92 },
+    { c: -40, f: 0.65 }
+  ]
+};
 
 const el = {
   connect: $('btnConnect'), dot: $('statusDot'), statusText: $('statusText'),
@@ -840,12 +1009,17 @@ const el = {
   btnStream: $('btnStream'), streamHint: $('streamHint'),
 
   kvFw: $('kvFw'), kvState: $('kvState'), kvRecords: $('kvRecords'),
-  kvFlash: $('kvFlash'), kvInterval: $('kvInterval'), kvAdaptive: $('kvAdaptive'),
-  kvQuiet: $('kvQuiet'), kvOta: $('kvOta'),
+  kvFlash: $('kvFlash'), kvInterval: $('kvInterval'),
+  kvHeadroom: $('kvHeadroom'), kvOta: $('kvOta'),
 
-  tgAdaptive: $('tgAdaptive'), adaptNotice: $('adaptCalNotice'),
-  inFast: $('inFast'), inSlow: $('inSlow'), inSd: $('inSd'),
-  inTemp: $('inTemp'), inQuiet: $('inQuiet'), samplingHint: $('samplingHint'),
+  inInterval: $('inInterval'), inPreset: $('inPreset'), chkGate: $('chkGate'),
+  estGrid: $('estGrid'), estLimit: $('estLimit'), intervalHint: $('intervalHint'),
+
+  kvBattWhen: $('kvBattWhen'), kvBattAge: $('kvBattAge'), kvBattLog: $('kvBattLog'),
+  kvBattSamples: $('kvBattSamples'), kvBattPct: $('kvBattPct'),
+  battFill: $('battFill'), battHint: $('battHint'),
+
+  scanWrap: $('wifiScanWrap'), scanHead: $('wifiScanHead'), scanList: $('wifiScanList'),
 
   progressWrap: $('progressWrap'), progressFill: $('progressFill'),
   progressCnt: $('progressCount'),
@@ -892,11 +1066,214 @@ const state = {
   device: null, cmdChar: null, dataChar: null,
   logging: false, records: 0, firmware: null, storageFull: false,
   used: 0, total: 0,
-  intervalNow: null, adaptive: false, slowMode: false,
-  fastSec: null, slowSec: null, sdMg: null, tempC100: null, quietSec: null,
-  quietNow: 0, otaCapable: null,
+  intervalNow: null, otaCapable: null,
+  recBytes: 23,            // on-flash record size, reported by the logger
+  streamLimitSec: 60,
+  battInstalled: 0, battAgeSec: 0, battLogSec: 0, battSamples: 0,
   wifiIp: null, streaming: false
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2b. Formatting helpers
+   ═══════════════════════════════════════════════════════════════════════════ */
+function fmtDays(d) {
+  if (!isFinite(d)) return '—';
+  if (d < 1)   return (d * 24).toFixed(1) + ' h';
+  if (d < 100) return d.toFixed(1) + ' d';
+  return Math.round(d).toLocaleString() + ' d';
+}
+
+function fmtDuration(sec) {
+  if (!sec) return '0 h';
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d) return `${d} d ${h} h`;
+  if (h) return `${h} h ${m} min`;
+  return `${m} min`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2c. Endurance estimator
+
+   Two independent limits, shown side by side because in practice they trade
+   places: at short intervals the flash fills long before the cell runs down,
+   and at long intervals the cell is the binding constraint. Showing only one
+   of them is how you end up planning a 14-day deployment that stops writing
+   on day three.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const estimator = (() => {
+  const intervalSec = () => {
+    const v = parseInt(el.inInterval.value, 10);
+    return (v >= 5 && v <= 3600) ? v : null;
+  };
+
+  const idleUa = () => (el.chkGate.checked ? POWER.idleGatedUa : POWER.idleUngatedUa);
+
+  // Average consumption per day, in mAh, at a given sample interval.
+  function mahPerDay(iv) {
+    const samplesPerDay = 86400 / iv;
+    const activeMah = samplesPerDay * POWER.activeMa * POWER.activeSec / 3600;
+    const idleMah   = idleUa() / 1000 * 24;
+    return activeMah + idleMah;
+  }
+
+  function batteryDays(iv, derateF) {
+    return (POWER.cellMah * derateF) / mahPerDay(iv);
+  }
+
+  // Exact, not modelled: straight from the logger's real filesystem size.
+  function storageDaysTotal(iv) {
+    if (!state.total || !state.recBytes) return null;
+    return (state.total / state.recBytes) * iv / 86400;
+  }
+
+  function storageDaysRemaining() {
+    const iv = state.intervalNow || intervalSec();
+    if (!iv || !state.total || !state.recBytes) return null;
+    const freeBytes = Math.max(0, state.total - state.used);
+    return (freeBytes / state.recBytes) * iv / 86400;
+  }
+
+  // Rough burn-down of the fitted cell, from real logged samples and real
+  // elapsed time rather than from the nameplate interval.
+  function cellUsedPercent() {
+    if (!state.battInstalled || !state.battAgeSec) return null;
+    const activeMah = state.battSamples * POWER.activeMa * POWER.activeSec / 3600;
+    const idleMah   = idleUa() / 1000 * (state.battAgeSec / 3600);
+    return (activeMah + idleMah) / POWER.cellMah * 100;
+  }
+
+  function render() {
+    const iv = intervalSec();
+    if (!iv) {
+      el.estGrid.innerHTML = '';
+      el.estLimit.textContent = 'Enter an interval between 5 and 3600 seconds.';
+      return;
+    }
+
+    const store = storageDaysTotal(iv);
+    const cells = POWER.derate.map((d) => ({
+      lab: `Battery at ${d.c} °C`, days: batteryDays(iv, d.f)
+    }));
+    cells.push({ lab: 'Storage', days: store, exact: true });
+
+    // The binding limit is whichever runs out first at the coldest realistic
+    // temperature, since that is the case that actually ends a deployment.
+    const coldest = cells[cells.length - 2].days;
+    const bind = (store !== null && store < coldest) ? 'Storage' : 'Battery';
+
+    el.estGrid.innerHTML = cells.map((c) => {
+      const isBind = (c.exact && bind === 'Storage') ||
+                     (!c.exact && bind === 'Battery' && c.lab.includes('0 °C') && !c.lab.includes('-40'));
+      return `<div class="estcell${isBind ? ' bind' : ''}">
+                <div class="lab">${c.lab}</div>
+                <div class="val">${c.days === null ? '—' : fmtDays(c.days)}</div>
+                <div class="unit">${c.exact ? 'from real flash size' : 'modelled'}</div>
+              </div>`;
+    }).join('');
+
+    const perDay = mahPerDay(iv);
+    let msg = `At ${iv} s that is ${Math.round(86400 / iv).toLocaleString()} ` +
+              `samples a day and about ${perDay.toFixed(1)} mAh a day. `;
+    if (store === null) {
+      msg += 'Connect to the logger to see the storage limit.';
+    } else if (bind === 'Storage') {
+      msg += `<strong>Storage is the limit here</strong> — the flash fills after ` +
+             `${fmtDays(store)}, before the cell runs down. Lengthen the interval ` +
+             `or plan to download partway through.`;
+    } else {
+      msg += `<strong>The battery is the limit here</strong> — flash would last ` +
+             `${fmtDays(store)}, so the cell gives out first.`;
+    }
+    if (!el.chkGate.checked) {
+      msg += ` The thermocouple is not power-gated, so ~${POWER.idleUngatedUa} µA ` +
+             `of idle draw (${(POWER.idleUngatedUa / 1000 * 24).toFixed(0)} mAh/day) ` +
+             `is included. Tick the box to see what fitting that gate would buy.`;
+    }
+    el.estLimit.innerHTML = msg;
+  }
+
+  return { render, storageDaysRemaining, cellUsedPercent };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2d. WiFi scan results
+
+   The logger has always replied to SCAN; there was simply nowhere to put the
+   answer, so the results only ever reached the activity log. This renders
+   them as a tappable list that fills in the SSID field.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const wifiScan = (() => {
+  let found = [];
+
+  function show(msg) {
+    el.scanWrap.classList.add('show');
+    el.scanHead.textContent = msg;
+  }
+
+  function bars(rssi) {
+    // -50 or better is full, -90 or worse is one bar.
+    const n = rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -78 ? 2 : 1;
+    let h = '<span class="bars">';
+    for (let i = 1; i <= 4; i++) h += `<i class="${i <= n ? 'on' : ''}"></i>`;
+    return h + '</span>';
+  }
+
+  function paint() {
+    // Strongest first, and only the best sighting of each SSID — mesh and
+    // repeater setups otherwise fill the list with duplicates.
+    const best = new Map();
+    found.forEach((n) => {
+      const prev = best.get(n.ssid);
+      if (!prev || n.rssi > prev.rssi) best.set(n.ssid, n);
+    });
+    const list = [...best.values()].sort((a, b) => b.rssi - a.rssi);
+
+    el.scanList.innerHTML = list.map((n, i) => `
+      <button class="scanrow" data-i="${i}" type="button">
+        ${bars(n.rssi)}
+        <span class="ssid">${n.ssid.replace(/[<>&]/g, '')}</span>
+        <span class="lock">${n.secured ? '🔒' : 'open'}</span>
+        <span class="rssi">${n.rssi} dBm</span>
+      </button>`).join('');
+
+    [...el.scanList.querySelectorAll('.scanrow')].forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const n = list[parseInt(btn.dataset.i, 10)];
+        el.wifiSSID.value = n.ssid;
+        if (n.secured) el.wifiPass.focus();
+        logLine('[WiFi] selected "' + n.ssid + '"', 't-muted');
+      });
+    });
+  }
+
+  function onMessage(p) {
+    if (p[1] === 'BUSY') {
+      found = [];
+      el.scanList.innerHTML = '';
+      show('Scanning… the Bluetooth link may stutter');
+      return;
+    }
+    if (p[1] === 'NONE') { show('No networks heard'); return; }
+    if (p[1] === 'DONE') {
+      show(found.length ? `${found.length} networks — tap one to use it`
+                        : 'No networks heard');
+      paint();
+      return;
+    }
+    // SCAN|rssi|secured|ssid — SSID is the remainder so names containing
+    // '|' survive intact.
+    const rssi = parseInt(p[1], 10);
+    if (!Number.isFinite(rssi)) return;
+    const ssid = p.slice(3).join('|');
+    if (!ssid) return;
+    found.push({ rssi, secured: p[2] === '1', ssid });
+    show(`Scanning… ${found.length} found`);
+  }
+
+  return { onMessage };
+})();
 
 /* ═══════════════════════════════════════════════════════════════════════════
    3. BLE transport
@@ -976,6 +1353,7 @@ ble.onLine((line) => {
 
   switch (p[0]) {
     // STATUS|state|records|used|total|fw|full|intervalNow|adaptive|slowNow
+    // The last two are legacy and always 0 since adaptive sampling was removed.
     case 'STATUS':
       state.logging     = p[1] === 'LOGGING';
       state.records     = int(p[2]) || 0;
@@ -984,26 +1362,35 @@ ble.onLine((line) => {
       state.firmware    = p[5] || null;
       state.storageFull = p[6] === '1';
       state.intervalNow = int(p[7]);
-      state.adaptive    = p[8] === '1';
-      state.slowMode    = p[9] === '1';
       ui.refresh();
       logLine(`[Status] ${p[1]} · ${state.records} records · ` +
-              `${state.intervalNow}s interval` +
-              (state.adaptive ? ` · adaptive ${state.slowMode ? 'SLOW' : 'fast'}` : ' · fixed'),
-              't-good');
+              `${state.intervalNow}s interval`, 't-good');
       return;
 
-    // CFG|fast|slow|sdMg|tempC100|quietSec|quietNow|otaCapable
+    // CFG|intervalSec|recBytes|otaCapable|streamLimitSec
     case 'CFG':
-      state.fastSec    = int(p[1]);
-      state.slowSec    = int(p[2]);
-      state.sdMg       = int(p[3]);
-      state.tempC100   = int(p[4]);
-      state.quietSec   = int(p[5]);
-      state.quietNow   = int(p[6]) || 0;
-      state.otaCapable = p[7] === '1';
-      ui.fillSamplingForm();
+      state.intervalNow    = int(p[1]) || state.intervalNow;
+      state.recBytes       = int(p[2]) || state.recBytes;
+      state.otaCapable     = p[3] === '1';
+      state.streamLimitSec = int(p[4]) || state.streamLimitSec;
+      ui.fillIntervalForm();
       ui.refresh();
+      return;
+
+    // BATT|installedUnix|ageSec|logSec|samples
+    case 'BATT':
+      if (p[1] === 'RESET') { logLine('[Battery] counters reset', 't-good'); return; }
+      state.battInstalled = int(p[1]) || 0;
+      state.battAgeSec    = int(p[2]) || 0;
+      state.battLogSec    = int(p[3]) || 0;
+      state.battSamples   = int(p[4]) || 0;
+      ui.refresh();
+      return;
+
+    // SCAN|BUSY|…  ·  SCAN|DONE|0|n  ·  SCAN|NONE|0|…  ·  SCAN|rssi|secured|ssid
+    // The SSID is last so a network name containing '|' cannot break parsing.
+    case 'SCAN':
+      wifiScan.onMessage(p);
       return;
 
     // LIVE|tc|amb|x|y|z|mag
@@ -1021,10 +1408,10 @@ ble.onLine((line) => {
 
     case 'STREAM':
       state.streaming = p[1] === 'ON';
+      if (p[1] === 'ON') { livePlot.startTimer(); logLine('[Stream] started — stops automatically after ' + state.streamLimitSec + ' s', 't-good'); }
+      else { livePlot.stopTimer(); logLine('[Stream] stopped' + (p[2] ? ' (' + p[2] + ')' : ''), 't-warn'); }
       ui.refreshStreamButton();
       ui.refresh();
-      if (p[1] === 'ON') logLine('[Stream] started', 't-good');
-      else logLine('[Stream] stopped' + (p[2] ? ' (' + p[2] + ')' : ''), 't-warn');
       return;
 
     case 'DUMPSTART':  dump.begin(int(p[1]) || 0); return;
@@ -1112,7 +1499,25 @@ const livePlot = (() => {
     [el.barCore, el.barAmb, el.barDt, el.barAct].forEach((b) => { b.style.width = '0%'; });
   }
 
-  return { push, clear, build };
+  // Client-side cutoff for live streaming. The firmware stops itself at the
+  // same limit; this exists so the UI agrees even against an older build,
+  // and so a forgotten live plot cannot quietly flatten the cell.
+  let streamTimer = null;
+  function startTimer() {
+    stopTimer();
+    streamTimer = setTimeout(() => {
+      streamTimer = null;
+      if (!state.streaming) return;
+      ble.send('STREAM:OFF');
+      logLine('[Stream] stopped automatically after ' +
+              (STREAM_LIMIT_MS / 1000) + ' s to save battery', 't-warn');
+    }, STREAM_LIMIT_MS);
+  }
+  function stopTimer() {
+    if (streamTimer) { clearTimeout(streamTimer); streamTimer = null; }
+  }
+
+  return { push, clear, build, startTimer, stopTimer };
 })();
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1138,8 +1543,8 @@ const ui = (() => {
     setTag(el.recBadge, state.records.toLocaleString() + ' records', state.records > 0);
     setTag(el.fwBadge, 'v' + state.firmware, !!state.firmware);
     setTag(el.modeBadge,
-      state.adaptive ? (state.slowMode ? 'Adaptive · slow' : 'Adaptive · fast') : '',
-      state.adaptive && c);
+      state.intervalNow ? 'Every ' + state.intervalNow + ' s' : '',
+      !!state.intervalNow && c);
     el.fullBadge.classList.toggle('on', state.storageFull);
 
     const set = (node, text, cls) => {
@@ -1157,18 +1562,42 @@ const ui = (() => {
       state.storageFull ? 'red' : (state.total ? '' : 'muted'));
     set(el.kvInterval, state.intervalNow ? state.intervalNow + ' s' : '—',
         state.intervalNow ? '' : 'muted');
-    set(el.kvAdaptive, (state.fastSec === null && !c) ? '—'
-        : state.adaptive ? `on — ${state.slowMode ? 'slow' : 'fast'}` : 'off',
-        state.adaptive ? '' : 'muted');
-    set(el.kvQuiet, (state.adaptive && state.quietSec)
-        ? `${state.quietNow} / ${state.quietSec} s` : '—',
-        (state.adaptive && state.quietSec) ? '' : 'muted');
+
+    // Storage headroom in time, which is what actually matters when planning
+    // a deployment — bytes free tells you nothing without the interval.
+    const remain = estimator.storageDaysRemaining();
+    set(el.kvHeadroom, remain === null ? '—' : fmtDays(remain) + ' at this interval',
+        remain === null ? 'muted' : (remain < 2 ? 'red' : ''));
+
     set(el.kvOta, state.otaCapable === null ? '—' : (state.otaCapable ? 'yes' : 'NO'),
         state.otaCapable === null ? 'muted' : (state.otaCapable ? 'green' : 'red'));
 
-    el.tgAdaptive.classList.toggle('on', state.adaptive);
-    el.adaptNotice.classList.toggle('hidden', !state.adaptive);
+    refreshBattery(set);
+    estimator.render();
     refreshStreamButton();
+  }
+
+  // — Battery age panel —
+  function refreshBattery(set) {
+    if (!state.battInstalled) {
+      set(el.kvBattWhen, '—', 'muted');
+      set(el.kvBattAge, '—', 'muted');
+      set(el.kvBattLog, '—', 'muted');
+      set(el.kvBattSamples, '—', 'muted');
+      set(el.kvBattPct, '—', 'muted');
+      el.battFill.style.width = '0%';
+      return;
+    }
+    const d = new Date(state.battInstalled * 1000);
+    set(el.kvBattWhen, d.toLocaleString(), '');
+    set(el.kvBattAge, fmtDuration(state.battAgeSec), '');
+    set(el.kvBattLog, fmtDuration(state.battLogSec), '');
+    set(el.kvBattSamples, state.battSamples.toLocaleString(), '');
+
+    const pct = estimator.cellUsedPercent();
+    if (pct === null) { set(el.kvBattPct, '—', 'muted'); el.battFill.style.width = '0%'; return; }
+    set(el.kvBattPct, pct.toFixed(1) + '%', pct > 80 ? 'red' : '');
+    el.battFill.style.width = Math.min(100, pct).toFixed(1) + '%';
   }
 
   function refreshStreamButton() {
@@ -1177,12 +1606,9 @@ const ui = (() => {
     el.btnStream.disabled = !ble.isConnected();
   }
 
-  function fillSamplingForm() {
-    if (state.fastSec  !== null) el.inFast.value  = state.fastSec;
-    if (state.slowSec  !== null) el.inSlow.value  = state.slowSec;
-    if (state.sdMg     !== null) el.inSd.value    = state.sdMg;
-    if (state.tempC100 !== null) el.inTemp.value  = (state.tempC100 / 100).toFixed(2);
-    if (state.quietSec !== null) el.inQuiet.value = state.quietSec;
+  function fillIntervalForm() {
+    if (state.intervalNow) el.inInterval.value = state.intervalNow;
+    estimator.render();
   }
 
   function setControls(on) {
@@ -1223,37 +1649,42 @@ const ui = (() => {
   $('btnDump').addEventListener('click',   () => ble.send('DUMP'));
 
   el.btnStream.addEventListener('click', () => {
-    if (state.streaming) ble.send('STREAM:OFF');
-    else { livePlot.clear(); ble.send('STREAM:ON'); }
+    if (state.streaming) { livePlot.stopTimer(); ble.send('STREAM:OFF'); }
+    else { livePlot.clear(); livePlot.startTimer(); ble.send('STREAM:ON'); }
   });
 
-  el.tgAdaptive.addEventListener('click', () => {
-    if (el.tgAdaptive.disabled) return;
-    ble.send(state.adaptive ? 'ADAPTIVE:OFF' : 'ADAPTIVE:ON');
+  el.inInterval.addEventListener('input', () => estimator.render());
+  el.chkGate.addEventListener('change', () => estimator.render());
+  el.inPreset.addEventListener('change', () => {
+    if (!el.inPreset.value) return;
+    el.inInterval.value = el.inPreset.value;
+    el.inPreset.value = '';
+    estimator.render();
   });
 
-  $('btnSaveSampling').addEventListener('click', () => {
-    const fast  = parseInt(el.inFast.value, 10);
-    const slow  = parseInt(el.inSlow.value, 10);
-    const sd    = parseInt(el.inSd.value, 10);
-    const tempC = parseFloat(el.inTemp.value);
-    const quiet = parseInt(el.inQuiet.value, 10);
+  $('btnSaveInterval').addEventListener('click', () => {
+    const secs = parseInt(el.inInterval.value, 10);
+    const bad = (m) => { el.intervalHint.textContent = m; el.intervalHint.className = 'note bad'; };
+    if (!(secs >= 5 && secs <= 3600)) return bad('Interval must be 5–3600 s.');
 
-    const bad = (m) => { el.samplingHint.textContent = m; el.samplingHint.className = 'note bad'; };
-
-    if (!(fast >= 5 && fast <= 3600))     return bad('Fast interval must be 5–3600 s.');
-    if (!(slow >= fast && slow <= 3600))  return bad('Slow interval must be between the fast interval and 3600 s.');
-    if (!(sd >= 1 && sd <= 4000))         return bad('Activity threshold must be 1–4000 mg.');
-    if (!(tempC > 0 && tempC <= 50))      return bad('Temp tolerance must be greater than 0 and at most 50 °C.');
-    if (!(quiet >= 30 && quiet <= 43200)) return bad('Quiet period must be 30–43200 s.');
-
-    el.samplingHint.textContent = 'Saving…';
-    el.samplingHint.className = 'note';
-    ble.send(`ADAPTCFG:${fast}|${slow}|${sd}|${Math.round(tempC * 100)}|${quiet}`);
+    el.intervalHint.textContent = 'Saving…';
+    el.intervalHint.className = 'note';
+    ble.send('INTERVAL:' + secs);
     setTimeout(() => {
-      el.samplingHint.textContent = 'Saved to the logger’s flash and applied on the next sample.';
-      el.samplingHint.className = 'note good';
+      el.intervalHint.textContent = 'Saved to the logger’s flash and applied on the next sample.';
+      el.intervalHint.className = 'note good';
     }, 600);
+  });
+
+  // Deliberately confirmed: resetting these counters throws away the only
+  // record of how much of the current cell has been used.
+  $('btnBattNew').addEventListener('click', () => {
+    if (!confirm('Reset the battery counters?\n\nOnly do this if you have actually ' +
+                 'fitted a fresh cell. The record of how much the current cell has ' +
+                 'been used cannot be recovered.')) return;
+    ble.send('BATT:RESET');
+    el.battHint.textContent = 'Counters reset — this cell is now tracked from now.';
+    el.battHint.className = 'note good';
   });
 
   $('btnErase').addEventListener('click', () => el.eraseBanner.classList.add('show'));
@@ -1268,7 +1699,7 @@ const ui = (() => {
     logLine('Erase cancelled.', 't-muted');
   });
 
-  return { refresh, refreshStreamButton, fillSamplingForm, setControls,
+  return { refresh, refreshStreamButton, fillIntervalForm, setControls,
            onConnected, onDisconnected };
 })();
 
@@ -1520,9 +1951,12 @@ const ota = (() => {
           summaryEl.style.display = 'block';
           summaryEl.textContent = 'No recognizable temperature or acceleration columns in this file.';
           chartsWrap.style.display = 'none';
+          $('csvWindow').classList.remove('show');
           return;
         }
-        renderCharts(parsed);
+        fullParsed = parsed;
+        buildWindowControls();
+        applyWindow();
       } catch (err) {
         summaryEl.style.display = 'block';
         summaryEl.textContent = 'Error parsing file: ' + err.message;
@@ -1583,13 +2017,164 @@ const ota = (() => {
       if (timeSource === 'unix') t = (r.unix - t0) / 60;
       else if (timeSource === 'elapsed') t = r.elapsed / 60;
       else t = r.idx * 0.25;
-      return { t, ti: r.ti, ta: r.ta, am: r.am, sd: r.sd, ap: r.ap, slow: r.slow };
+      // idx is kept so a cropped window can be written back out as the
+      // original CSV lines, verbatim, rather than re-serialised from the
+      // handful of columns the charts happen to use.
+      return { t, ti: r.ti, ta: r.ta, am: r.am, sd: r.sd, ap: r.ap,
+               slow: r.slow, idx: r.idx };
     });
 
-    return { rows, cols, timeSource };
+    return { rows, cols, timeSource, lines };
   }
 
   const round2 = (v) => Math.round(v * 100) / 100;
+
+  /* ── Window / crop ──────────────────────────────────────────────────
+     A 14-day log at 15 s is ~80,000 points. Drawn end to end that is a
+     smear: the interesting minute is a single pixel wide. These controls
+     narrow the charts to a slice — a chosen 24 h block, or an arbitrary
+     range — and let that slice be exported on its own.
+     ─────────────────────────────────────────────────────────────────── */
+  let fullParsed = null;
+  let winFrom = 0, winTo = 0;      // minutes, in the parsed time base
+
+  const winEl = {
+    wrap: $('csvWindow'), range: $('winRange'), quick: $('winQuick'),
+    start: $('winStart'), end: $('winEnd'), stats: $('winStats')
+  };
+
+  const spanMin = () => {
+    const r = fullParsed.rows;
+    return [r[0].t, r[r.length - 1].t];
+  };
+
+  function fmtMin(m) {
+    if (m < 60) return m.toFixed(1) + ' min';
+    if (m < 1440) return (m / 60).toFixed(1) + ' h';
+    return (m / 1440).toFixed(2) + ' d';
+  }
+
+  function buildWindowControls() {
+    const [t0, t1] = spanMin();
+    winFrom = t0; winTo = t1;
+    winEl.wrap.classList.add('show');
+    winEl.start.value = 0;
+    winEl.end.value = 1000;
+
+    // One button per whole 24 h block, plus the common shortcuts. For a
+    // short log the day buttons simply do not appear.
+    const totalMin = t1 - t0;
+    const days = Math.ceil(totalMin / 1440);
+    let html = '<button data-k="full" class="on">Full log</button>';
+    if (totalMin > 1440) {
+      html += '<button data-k="last24">Last 24 h</button>';
+      for (let d = 0; d < days && d < 30; d++) {
+        html += `<button data-k="day" data-d="${d}">Day ${d + 1}</button>`;
+      }
+    } else if (totalMin > 120) {
+      html += '<button data-k="lasthour">Last hour</button>';
+    }
+    winEl.quick.innerHTML = html;
+
+    [...winEl.quick.querySelectorAll('button')].forEach((b) => {
+      b.addEventListener('click', () => {
+        [...winEl.quick.querySelectorAll('button')].forEach((x) => x.classList.remove('on'));
+        b.classList.add('on');
+        const k = b.dataset.k;
+        if (k === 'full')          { winFrom = t0; winTo = t1; }
+        else if (k === 'last24')   { winFrom = Math.max(t0, t1 - 1440); winTo = t1; }
+        else if (k === 'lasthour') { winFrom = Math.max(t0, t1 - 60); winTo = t1; }
+        else if (k === 'day') {
+          const d = parseInt(b.dataset.d, 10);
+          winFrom = t0 + d * 1440;
+          winTo   = Math.min(t1, winFrom + 1440);
+        }
+        syncSliders();
+        applyWindow();
+      });
+    });
+  }
+
+  function syncSliders() {
+    const [t0, t1] = spanMin();
+    const span = (t1 - t0) || 1;
+    winEl.start.value = Math.round((winFrom - t0) / span * 1000);
+    winEl.end.value   = Math.round((winTo   - t0) / span * 1000);
+  }
+
+  function fromSliders() {
+    const [t0, t1] = spanMin();
+    const span = (t1 - t0) || 1;
+    let a = parseInt(winEl.start.value, 10) / 1000;
+    let b = parseInt(winEl.end.value, 10) / 1000;
+    if (a > b) { const s = a; a = b; b = s; }      // let either handle pass the other
+    winFrom = t0 + a * span;
+    winTo   = t0 + b * span;
+  }
+
+  function windowedRows() {
+    return fullParsed.rows.filter((r) => r.t >= winFrom && r.t <= winTo);
+  }
+
+  function applyWindow() {
+    if (!fullParsed) return;
+    const rows = windowedRows();
+    if (!rows.length) {
+      winEl.stats.textContent = 'No samples in this window.';
+      return;
+    }
+    renderCharts({ rows, cols: fullParsed.cols, timeSource: fullParsed.timeSource });
+    winEl.range.textContent = `${fmtMin(winFrom)} → ${fmtMin(winTo)}`;
+    renderWindowStats(rows);
+  }
+
+  function renderWindowStats(rows) {
+    const stat = (key, label, unit, dp) => {
+      const v = rows.map((r) => r[key]).filter((x) => !isNaN(x));
+      if (!v.length) return '';
+      const min = Math.min(...v), max = Math.max(...v);
+      const mean = v.reduce((a, b) => a + b, 0) / v.length;
+      return `<div><strong>${label}</strong> min ${min.toFixed(dp)} · ` +
+             `mean ${mean.toFixed(dp)} · max ${max.toFixed(dp)} ${unit}</div>`;
+    };
+    const pct = fullParsed.rows.length
+      ? (100 * rows.length / fullParsed.rows.length).toFixed(1) : '0';
+    winEl.stats.innerHTML =
+      `<div>${rows.length.toLocaleString()} of ${fullParsed.rows.length.toLocaleString()} ` +
+      `samples (${pct}%) · ${fmtMin(winTo - winFrom)} of data</div>` +
+      stat('ti', 'Core', '°C', 2) +
+      stat('ta', 'Ambient', '°C', 2) +
+      stat('am', 'Mean accel', 'mg', 0) +
+      stat('ap', 'Peak accel', 'mg', 0);
+  }
+
+  winEl.start.addEventListener('input', () => { fromSliders(); applyWindow(); });
+  winEl.end.addEventListener('input',   () => { fromSliders(); applyWindow(); });
+
+  $('btnWinFull').addEventListener('click', () => {
+    if (!fullParsed) return;
+    const [t0, t1] = spanMin();
+    winFrom = t0; winTo = t1;
+    [...winEl.quick.querySelectorAll('button')].forEach((x) => x.classList.remove('on'));
+    const f = winEl.quick.querySelector('[data-k="full"]');
+    if (f) f.classList.add('on');
+    syncSliders();
+    applyWindow();
+  });
+
+  // Exports the ORIGINAL lines for the visible rows, so every column
+  // survives the crop -- not just the ones the charts happen to plot.
+  $('btnWinCsv').addEventListener('click', () => {
+    if (!fullParsed) return;
+    const rows = windowedRows();
+    if (!rows.length) { alert('No samples in the current window.'); return; }
+    const src = fullParsed.lines;
+    const out = [src[0]].concat(rows.map((r) => src[r.idx + 1]).filter(Boolean));
+    saveFile(out.join('\n') + '\n',
+             'FishLogger_window_' + new Date().toISOString().slice(0, 10) + '.csv',
+             'text/csv');
+    logLine(`[CSV] exported ${rows.length} rows from the current window`, 't-good');
+  });
 
   function renderCharts(parsed) {
     const rows = parsed.rows;
@@ -1621,9 +2206,12 @@ const ota = (() => {
     if (ambR)  summary += ' · ambient ' + ambR[0].toFixed(1) + ' to ' + ambR[1].toFixed(1) + '°C';
     if (dtR)   summary += ' · Δ ' + dtR[0].toFixed(1) + ' to ' + dtR[1].toFixed(1) + '°C';
     if (peakR) summary += ' · peak accel max ' + peakR[1].toFixed(0) + ' mg';
-    if (parsed.cols.slow !== -1) {
+    // slow_mode is retained in the file format but is always 0 since adaptive
+    // sampling was removed, so it is only worth mentioning if an older log
+    // actually contains slow samples.
+    if (parsed.cols.slow !== -1 && slowCount > 0) {
       const pct = rows.length ? (100 * slowCount / rows.length).toFixed(0) : 0;
-      summary += ` · ${pct}% of samples on the slow adaptive rate`;
+      summary += ` · ${pct}% of samples on the slow adaptive rate (legacy file)`;
     }
     summaryEl.style.display = 'block';
     summaryEl.textContent = summary;

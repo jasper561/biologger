@@ -724,6 +724,7 @@
         <div class="kvrow"><span class="k">Flash used</span><span class="v muted" id="kvFlash">—</span></div>
         <div class="kvrow"><span class="k">Interval in effect</span><span class="v muted" id="kvInterval">—</span></div>
         <div class="kvrow"><span class="k">Storage remaining</span><span class="v muted" id="kvHeadroom">—</span></div>
+        <div class="kvrow"><span class="k">Deep sleep</span><span class="v muted" id="kvSleep">—</span></div>
         <div class="kvrow"><span class="k">OTA capable</span><span class="v muted" id="kvOta">—</span></div>
       </div>
       <button id="btnStatus" class="btn" style="margin-top:16px;" disabled>Refresh Status</button>
@@ -757,14 +758,28 @@
           </select>
           <span class="sub">Fills the field</span>
         </div>
+        <div class="field span2">
+          <label for="inTcType">Thermocouple type</label>
+          <select id="inTcType" disabled>
+            <option value="K">Type K — native mode of the fitted MAX31855K</option>
+            <option value="T">Type T — re-linearised in software</option>
+          </select>
+          <span class="sub">Must match the probe actually fitted. K is the chip’s
+            own mode; T is corrected using the NIST ITS-90 tables. Applied
+            immediately — no Save needed.</span>
+        </div>
       </div>
 
       <div class="estwrap">
         <div class="esthead">
           <span>Estimated endurance</span>
-          <label class="gatechk">
-            <input type="checkbox" id="chkGate"> thermocouple power-gated
-          </label>
+          <span class="gatechk">
+            <label><input type="checkbox" id="chkGate"> thermocouple power-gated</label>
+            <label>shake-checks/day
+              <input type="number" id="inChecks" min="0" max="50" step="1" value="2"
+                     style="width:4.2em;margin-left:4px;">
+            </label>
+          </span>
         </div>
         <div class="estgrid" id="estGrid"></div>
         <div class="estlimit" id="estLimit"></div>
@@ -785,20 +800,28 @@
           spiral-wound cell — a bobbin ER14505 would not survive the WiFi pulses
           at all, let alone the cold.</p>
 
-          <p><strong>Per sample.</strong> ~1.1&nbsp;s awake at ~45&nbsp;mA. Most of
-          that is the DS18B20: a 12-bit conversion takes 750&nbsp;ms and the part
-          has to stay powered throughout.</p>
+          <p><strong>Per sample.</strong> ~1.2&nbsp;s awake at ~45&nbsp;mA — about
+          0.3&nbsp;s to boot out of deep sleep, then the DS18B20, whose 12-bit
+          conversion takes 750&nbsp;ms with the part powered throughout. That one
+          sensor is most of the cost of taking a sample.</p>
 
-          <p><strong>Idle.</strong> The MAX31855 draws ~900&nbsp;µA continuously
-          whenever it is powered. Unless a GPIO power-gate is fitted, that single
-          number dominates the entire idle budget — tick the box above to see the
-          difference it makes. With the gate fitted, idle falls to roughly
+          <p><strong>Idle.</strong> ESP32 deep sleep is ~10&nbsp;µA and the ADXL362
+          keeps watching for motion on ~3&nbsp;µA. But the MAX31855 draws ~900&nbsp;µA
+          continuously whenever it is powered, so unless a GPIO power-gate is
+          fitted that single part dominates the entire idle budget — tick the box
+          above to see what it costs you. With the gate, idle falls to about
           15&nbsp;µA for the whole board.</p>
 
-          <p><strong>Assumes deep sleep between samples, which is not implemented
-          yet.</strong> The firmware currently stays awake with Bluetooth
-          advertising, which is closer to 1.5 days regardless of interval. These
-          figures describe the deployment build.</p>
+          <p><strong>Shake-checks.</strong> Each shake opens a 120&nbsp;s Bluetooth
+          advertising window at ~30&nbsp;mA, so roughly 1&nbsp;mAh per check. Set
+          how often you expect to pick the logger up; it is a small term unless
+          you check it many times a day.</p>
+
+          <p><strong>Deep sleep is implemented</strong> (firmware 3.2.0) but is
+          <em>off</em> until you send <code>SLEEP:ON</code>, so it does not get in
+          the way of bench testing. With sleep off the logger stays awake and
+          advertising continuously, which is closer to 1.5 days regardless of
+          interval — these figures describe the deployed state, with sleep on.</p>
 
           <p><strong>Storage</strong> is exact, not modelled: it comes from the
           logger's real filesystem size and its 23-byte record format.</p>
@@ -829,6 +852,59 @@
       <p class="note" style="margin-top:12px;" id="battHint">
         Resets the counters above. Only press this when the cell has actually
         been changed.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Deep sleep &amp; shake-to-wake</div>
+      <p class="note" style="margin-bottom:15px;">
+        With sleep off the logger stays awake and advertising, which is convenient
+        on the bench but flattens the cell in about a day and a half. With sleep on
+        it wakes only to sample — and becomes findable again when you shake it.
+      </p>
+
+      <div class="switch">
+        <div class="sw-text">
+          <strong>Deep sleep between samples</strong>
+          <div>Required for any deployment lasting more than a couple of days.
+               While asleep the logger does not advertise, so shaking it is how
+               you get back in.</div>
+        </div>
+        <button class="toggle" id="tgSleep" disabled aria-label="Toggle deep sleep"></button>
+      </div>
+
+      <div class="notice" id="sleepWarn">
+        <strong>Test the shake before you seal anything.</strong>
+        Once sleep is on and USB is gone, a shake is the only way to reach the
+        logger. Confirm it works: turn sleep on, unplug USB, wait past one
+        sample interval, check that it will <em>not</em> connect, then shake it
+        and check that it will. A live USB console deliberately keeps the logger
+        awake, so sleep behaviour is invisible while it is plugged in.
+      </div>
+
+      <div class="row2" style="gap:14px;">
+        <div class="field">
+          <label for="inShake">Shake threshold, mg</label>
+          <input type="number" id="inShake" min="100" max="4000" step="50"
+                 inputmode="numeric">
+          <span class="sub">Lower is more sensitive. Potting damps the knock, so
+                            re-test after it cures</span>
+        </div>
+        <div class="field">
+          <label for="inWindow">Findable window, seconds</label>
+          <input type="number" id="inWindow" min="15" max="900" step="15"
+                 inputmode="numeric">
+          <span class="sub">How long it advertises after a shake before going
+                            back to sleep</span>
+        </div>
+      </div>
+
+      <div class="row2" style="margin-top:16px;">
+        <button id="btnSaveSleep" class="btn" disabled>Save wake settings</button>
+        <button id="btnSleepNow"  class="btn" disabled>Sleep now</button>
+      </div>
+      <p class="note" style="margin-top:12px;" id="sleepHint">
+        Saved to the logger’s flash. Settings survive reboots and firmware updates.
       </p>
     </div>
 
@@ -876,7 +952,7 @@
         <div id="wifiScanList" class="scanlist"></div>
       </div>
       <div id="wifiStatus" class="note" style="margin-top:15px;">Not connected to WiFi.</div>
-      <a id="wifiLink" class="linkout" href="#" target="_blank" rel="noopener">Download CSV over WiFi</a>
+      <button id="wifiLink" class="linkout" style="cursor:pointer; width:100%;">Copy WiFi Download Link</button>
     </div>
 
     <div class="card">
@@ -973,7 +1049,7 @@ const $ = (id) => document.getElementById(id);
 const CONTROL_IDS = [
   'btnStart','btnStop','btnStream','btnLiveOne','btnStatus','btnDump',
   'btnErase','btnSaveInterval','btnBattNew','btnConnectWifi','btnUseSavedWifi',
-  'btnScanWifi','btnWifiOff','btnOtaPrepare'
+  'btnScanWifi','btnWifiOff','btnOtaPrepare','tgSleep','btnSaveSleep','btnSleepNow'
 ];
 
 // Live streaming is the most expensive thing the logger can do — it holds
@@ -988,9 +1064,12 @@ const STREAM_LIMIT_MS = 60000;
 const POWER = {
   cellMah:       1800,   // ER14505M nominal at +20 C
   activeMa:      45,     // CPU + sensors awake, radio off
-  activeSec:     1.1,    // dominated by the DS18B20's 750 ms conversion
-  idleUngatedUa: 920,    // MAX31855 quiescent draw dominates this
+  activeSec:     1.2,    // deep-sleep boot (~0.3 s) + the DS18B20's 750 ms
+  idleUngatedUa: 915,    // ESP32 deep sleep ~10 uA + ADXL362 ~3 uA
+                         // + MAX31855 ~900 uA, which dominates everything
   idleGatedUa:   15,     // whole board, thermocouple gated off
+  bleWindowSec:  120,    // advertising window opened by a shake
+  bleWindowMa:   30,     // CPU + advertising during that window
   derate: [
     { c:  20, f: 1.00 },
     { c:   0, f: 0.92 },
@@ -1010,9 +1089,14 @@ const el = {
 
   kvFw: $('kvFw'), kvState: $('kvState'), kvRecords: $('kvRecords'),
   kvFlash: $('kvFlash'), kvInterval: $('kvInterval'),
-  kvHeadroom: $('kvHeadroom'), kvOta: $('kvOta'),
+  kvHeadroom: $('kvHeadroom'), kvSleep: $('kvSleep'), kvOta: $('kvOta'),
+
+  tgSleep: $('tgSleep'), inShake: $('inShake'), inWindow: $('inWindow'),
+  sleepHint: $('sleepHint'), sleepWarn: $('sleepWarn'),
 
   inInterval: $('inInterval'), inPreset: $('inPreset'), chkGate: $('chkGate'),
+  inTcType: $('inTcType'),
+  inChecks: $('inChecks'),
   estGrid: $('estGrid'), estLimit: $('estLimit'), intervalHint: $('intervalHint'),
 
   kvBattWhen: $('kvBattWhen'), kvBattAge: $('kvBattAge'), kvBattLog: $('kvBattLog'),
@@ -1070,6 +1154,8 @@ const state = {
   recBytes: 23,            // on-flash record size, reported by the logger
   streamLimitSec: 60,
   battInstalled: 0, battAgeSec: 0, battLogSec: 0, battSamples: 0,
+  sleepOn: false, shakeMg: null, wakeWindowSec: null, wokeOnShake: false,
+  tcType: null,
   wifiIp: null, streaming: false
 };
 
@@ -1110,12 +1196,20 @@ const estimator = (() => {
 
   const idleUa = () => (el.chkGate.checked ? POWER.idleGatedUa : POWER.idleUngatedUa);
 
+  const checksPerDay = () => {
+    const v = parseFloat(el.inChecks.value);
+    return (isFinite(v) && v >= 0) ? v : 0;
+  };
+
   // Average consumption per day, in mAh, at a given sample interval.
+  // Three terms: waking to sample, idling in between, and the advertising
+  // windows opened each time someone shakes the logger to check on it.
   function mahPerDay(iv) {
     const samplesPerDay = 86400 / iv;
     const activeMah = samplesPerDay * POWER.activeMa * POWER.activeSec / 3600;
     const idleMah   = idleUa() / 1000 * 24;
-    return activeMah + idleMah;
+    const bleMah    = checksPerDay() * POWER.bleWindowSec * POWER.bleWindowMa / 3600;
+    return activeMah + idleMah + bleMah;
   }
 
   function batteryDays(iv, derateF) {
@@ -1387,6 +1481,33 @@ ble.onLine((line) => {
       ui.refresh();
       return;
 
+    // TCTYPE|K or TCTYPE|T — which thermocouple the logger is decoding for.
+    case 'TCTYPE':
+      state.tcType = p[1] === 'T' ? 'T' : 'K';
+      el.inTcType.value = state.tcType;
+      logLine('[Probe] decoding as type ' + state.tcType, 't-good');
+      return;
+
+    // SLEEPCFG|enabled|shakeThreshMg|windowSec|wokeOnShake
+    case 'SLEEPCFG':
+      state.sleepOn       = p[1] === '1';
+      state.shakeMg       = int(p[2]);
+      state.wakeWindowSec = int(p[3]);
+      state.wokeOnShake   = p[4] === '1';
+      ui.fillSleepForm();
+      ui.refresh();
+      return;
+
+    // SLEEP|ON|… · SLEEP|OFF|… · SLEEP|NOW|…
+    case 'SLEEP':
+      logLine('[Sleep] ' + p.slice(1).join(' '), p[1] === 'ON' ? 't-warn' : 't-muted');
+      return;
+
+    // The logger announces this when a shake is what woke it.
+    case 'WAKE':
+      logLine('[Wake] ' + (p[1] === 'SHAKE' ? 'woken by a shake' : p[1]), 't-good');
+      return;
+
     // SCAN|BUSY|…  ·  SCAN|DONE|0|n  ·  SCAN|NONE|0|…  ·  SCAN|rssi|secured|ssid
     // The SSID is last so a network name containing '|' cannot break parsing.
     case 'SCAN':
@@ -1569,8 +1690,16 @@ const ui = (() => {
     set(el.kvHeadroom, remain === null ? '—' : fmtDays(remain) + ' at this interval',
         remain === null ? 'muted' : (remain < 2 ? 'red' : ''));
 
+    // Called out because it decides whether the logger is reachable at all
+    // once USB is gone: awake means always pairable, asleep means shake-only.
+    set(el.kvSleep, !c ? '—' : (state.sleepOn ? 'on — shake to wake' : 'off — always awake'),
+        !c ? 'muted' : (state.sleepOn ? 'green' : 'muted'));
+
     set(el.kvOta, state.otaCapable === null ? '—' : (state.otaCapable ? 'yes' : 'NO'),
         state.otaCapable === null ? 'muted' : (state.otaCapable ? 'green' : 'red'));
+
+    el.tgSleep.classList.toggle('on', state.sleepOn);
+    el.sleepWarn.classList.toggle('hidden', !state.sleepOn);
 
     refreshBattery(set);
     estimator.render();
@@ -1611,8 +1740,14 @@ const ui = (() => {
     estimator.render();
   }
 
+  function fillSleepForm() {
+    if (state.shakeMg !== null)       el.inShake.value  = state.shakeMg;
+    if (state.wakeWindowSec !== null) el.inWindow.value = state.wakeWindowSec;
+  }
+
   function setControls(on) {
     CONTROL_IDS.forEach((id) => { const b = $(id); if (b) b.disabled = !on; });
+    el.inTcType.disabled = !on;
   }
 
   function onConnected() {
@@ -1655,6 +1790,14 @@ const ui = (() => {
 
   el.inInterval.addEventListener('input', () => estimator.render());
   el.chkGate.addEventListener('change', () => estimator.render());
+  el.inChecks.addEventListener('input', () => estimator.render());
+
+  // Applied immediately rather than behind a Save: getting this wrong makes
+  // every temperature reading wrong, so it should be one action and visible
+  // in the log straight away.
+  el.inTcType.addEventListener('change', () => {
+    ble.send('TCTYPE:' + el.inTcType.value);
+  });
   el.inPreset.addEventListener('change', () => {
     if (!el.inPreset.value) return;
     el.inInterval.value = el.inPreset.value;
@@ -1699,8 +1842,46 @@ const ui = (() => {
     logLine('Erase cancelled.', 't-muted');
   });
 
-  return { refresh, refreshStreamButton, fillIntervalForm, setControls,
-           onConnected, onDisconnected };
+  /* — Deep sleep & shake-to-wake — */
+  el.tgSleep.addEventListener('click', () => {
+    if (el.tgSleep.disabled) return;
+    if (!state.sleepOn &&
+        !confirm('Turn on deep sleep?\n\nThe logger will stop advertising between ' +
+                 'samples. After that a shake is the only way to make it findable ' +
+                 'again — so test that before sealing anything.\n\n' +
+                 'While USB is connected it deliberately stays awake, so you will ' +
+                 'not see sleeping behaviour until you unplug it.')) return;
+    ble.send(state.sleepOn ? 'SLEEP:OFF' : 'SLEEP:ON');
+    setTimeout(() => ble.send('SLEEPCFG'), 400);
+  });
+
+  $('btnSaveSleep').addEventListener('click', () => {
+    const shake = parseInt(el.inShake.value, 10);
+    const win   = parseInt(el.inWindow.value, 10);
+    const bad = (m) => { el.sleepHint.textContent = m; el.sleepHint.className = 'note bad'; };
+    if (!(shake >= 100 && shake <= 4000)) return bad('Shake threshold must be 100–4000 mg.');
+    if (!(win >= 15 && win <= 900))       return bad('Findable window must be 15–900 s.');
+
+    el.sleepHint.textContent = 'Saving…';
+    el.sleepHint.className = 'note';
+    ble.send('SHAKE:' + shake);
+    setTimeout(() => ble.send('WINDOW:' + win), 350);
+    setTimeout(() => {
+      el.sleepHint.textContent = 'Saved to the logger’s flash. Settings survive ' +
+                                 'reboots and firmware updates.';
+      el.sleepHint.className = 'note good';
+    }, 900);
+  });
+
+  $('btnSleepNow').addEventListener('click', () => {
+    if (!confirm('Put the logger to sleep now?\n\nBluetooth will drop immediately. ' +
+                 'Shake it to bring it back.')) return;
+    ble.send('SLEEP:NOW');
+    logLine('[Sleep] sleeping now — shake the logger to wake it', 't-warn');
+  });
+
+  return { refresh, refreshStreamButton, fillIntervalForm, fillSleepForm,
+           setControls, onConnected, onDisconnected };
 })();
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1789,13 +1970,20 @@ const wifi = (() => {
   });
   $('btnScanWifi').addEventListener('click', () => ble.send('SCAN'));
   $('btnWifiOff').addEventListener('click',  () => ble.send('WIFIOFF'));
-
-  function onMessage(p) {
+function onMessage(p) {
     if (p[1] === 'OK') {
       state.wifiIp = p[2];
-      el.wifiLink.href = 'http://' + p[2] + '/data.csv';
-      el.wifiLink.textContent = 'Download CSV over WiFi — ' + p[2];
+      const downloadUrl = 'http://' + p[2] + '/data.csv';
+      
+      // Update button behavior to copy the link
+      el.wifiLink.textContent = 'Copy Link: ' + downloadUrl;
       el.wifiLink.classList.add('show');
+      el.wifiLink.onclick = () => {
+        navigator.clipboard.writeText(downloadUrl).then(() => {
+          alert(`Link copied: ${downloadUrl}\n\nPaste this into a new browser tab to download your data.`);
+        });
+      };
+
       setStatus('Connected as ' + p[2] + '. Your phone or computer must be on the ' +
                 'same network. Much faster than a Bluetooth dump.', 'note good');
       logLine('[WiFi] connected: ' + p[2], 't-good');
